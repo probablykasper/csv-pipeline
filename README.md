@@ -1,6 +1,6 @@
-[documentation]: https://docs.rs/csv-pipeline
-
 # CSV Pipeline
+
+⚠️ Work in progress
 
 CSV processing library
 
