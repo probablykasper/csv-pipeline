@@ -1,0 +1,19 @@
+[package]
+name = "csv-pipeline"
+version = "0.0.0"
+description = "CSV processing library"
+authors = ["Kasper Henningsen"]
+edition = "2021"
+readme = "README.md"
+license = "MIT"
+homepage = "https://github.com/probablykasper/csv-pipeline#readme"
+repository = "https://github.com/probablykasper/csv-pipeline"
+documentation = "https://docs.rs/csv-pipeline"
+keywords = ["csv", "tsv", "processing"]
+categories = ["parsing", "encoding"]
+
+[dependencies]
+csv = "1.1"
+
+[profile.dev]
+opt-level = 1
