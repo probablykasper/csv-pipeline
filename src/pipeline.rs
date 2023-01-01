@@ -1,16 +1,16 @@
+use super::chain::{BoxedIterator, Chain};
 use super::headers::Headers;
-use super::pipe::{Pipe, PipeIterator};
 use crate::{Error, Row, RowResult};
 use csv::{Reader, ReaderBuilder};
 use std::fs::File;
 use std::path::Path;
 
-pub struct Pipeline {
+pub struct PipelineBuilder {
 	pub headers: Headers,
-	pipe: PipeIterator,
+	chain: Chain,
 }
 
-impl Pipeline {
+impl PipelineBuilder {
 	pub fn from_reader(mut reader: Reader<File>) -> Self {
 		let headers_row = reader.headers().unwrap().clone();
 		let records = reader.into_records().map(|r| {
@@ -22,7 +22,7 @@ impl Pipeline {
 		});
 		Self {
 			headers: Headers::from(headers_row),
-			pipe: Box::new(records),
+			chain: Chain::new(Box::new(records)),
 		}
 	}
 
@@ -46,9 +46,9 @@ impl Pipeline {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::Pipeline;
+	/// use csv_pipeline::PipelineBuilder;
 	///
-	/// Pipeline::from_path("test/Countries.csv")
+	/// PipelineBuilder::from_path("test/Countries.csv")
 	///   .add_col("Language", |headers, row| {
 	///     Ok("".to_string())
 	///   });
@@ -57,36 +57,67 @@ impl Pipeline {
 	where
 		F: FnMut(&Headers, &Row) -> Result<String, Error>,
 	{
-		self.headers.add(name);
+		self.headers.push_field(name);
 
 		struct State<F> {
 			get_value: F,
 			headers: Headers,
 		}
-		let pipe = Pipe::new(self.pipe).with_state(State {
+		let stateful_chain = self.chain.with_state(State {
 			get_value,
 			headers: self.headers.clone(),
 		});
-		let newpipe = pipe.map(|row_result, state| {
+		let new_chain = stateful_chain.map(|row_result, state| {
+			println!("ADDCOL-map");
 			let mut row = row_result?;
 			let value = (state.get_value)(&state.headers, &row)?;
 			row.push_field(&value);
 			Ok(row)
 		});
 
-		self.pipe = Box::new(newpipe.iterator);
+		self.chain = new_chain;
 
 		self
+	}
+
+	pub fn build(self) -> Pipeline {
+		Pipeline {
+			headers: self.headers,
+			iterator: Box::new(self.chain),
+		}
+	}
+}
+
+pub struct Pipeline {
+	pub headers: Headers,
+	pub iterator: BoxedIterator,
+}
+impl Iterator for Pipeline {
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.iterator.next()
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::Pipeline;
+	use crate::PipelineBuilder;
 
 	#[test]
 	fn add_col() {
-		let mut pipeline = Pipeline::from_path("test/Countries.csv")
-			.add_col("Language", |_headers, _row| Ok("".to_string()));
+		let mut pipeline = PipelineBuilder::from_path("test/Countries.csv")
+			.add_col("Language", |_headers, _row| Ok("".to_string()))
+			.build();
+
+		let mut writer = csv::Writer::from_writer(vec![]);
+		writer.write_record(&pipeline.headers).unwrap();
+		println!("{:?}", pipeline.headers.get_row());
+		while let Some(item) = pipeline.next() {
+			println!("{:?}", item.clone().unwrap());
+			writer.write_record(&item.unwrap()).unwrap();
+		}
+		let s = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+		print!("{}", s);
 	}
 }

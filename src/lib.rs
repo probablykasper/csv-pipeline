@@ -1,10 +1,9 @@
-pub mod headers;
-pub mod pipe;
-pub mod pipeline;
+mod chain;
+mod headers;
+mod pipeline;
 
 pub use headers::Headers;
-pub use pipe::Pipe;
-pub use pipeline::Pipeline;
+pub use pipeline::{Pipeline, PipelineBuilder};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {

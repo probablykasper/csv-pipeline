@@ -1,25 +1,30 @@
 use crate::Row;
+use csv::StringRecordIter;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Headers {
 	indexes: HashMap<String, usize>,
-	names: Row,
+	row: Row,
 }
 impl Headers {
-	pub fn add(&mut self, name: &str) -> bool {
+	pub fn push_field(&mut self, name: &str) -> bool {
 		if self.indexes.contains_key(name) {
 			return false;
 		}
 
-		self.names.push_field(name);
-		self.indexes.insert(name.to_string(), self.names.len() - 1);
+		self.row.push_field(name);
+		self.indexes.insert(name.to_string(), self.row.len() - 1);
 
 		true
 	}
 
 	pub fn contains(&self, name: &str) -> bool {
 		self.indexes.contains_key(name)
+	}
+
+	pub fn get_row(&self) -> &Row {
+		&self.row
 	}
 }
 impl From<Row> for Headers {
@@ -30,7 +35,20 @@ impl From<Row> for Headers {
 				.enumerate()
 				.map(|(index, entry)| (entry.to_string(), index))
 				.collect(),
-			names: row,
+			row,
 		}
+	}
+}
+impl<'a> IntoIterator for &'a Headers {
+	type Item = &'a str;
+	type IntoIter = StringRecordIter<'a>;
+
+	fn into_iter(self) -> StringRecordIter<'a> {
+		self.row.into_iter()
+	}
+}
+impl From<Headers> for Row {
+	fn from(headers: Headers) -> Row {
+		headers.row
 	}
 }
