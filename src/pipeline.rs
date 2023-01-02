@@ -1,28 +1,21 @@
-use super::chain::{BoxedIterator, Chain};
 use super::headers::Headers;
-use crate::{Error, Row, RowResult};
+use crate::{Error, Row, RowIter, RowResult};
 use csv::{Reader, ReaderBuilder};
 use std::fs::File;
 use std::path::Path;
 
-pub struct PipelineBuilder {
+pub struct PipelineBuilder<'a> {
 	pub headers: Headers,
-	chain: Chain,
+	iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
 }
 
-impl PipelineBuilder {
+impl<'a> PipelineBuilder<'a> {
 	pub fn from_reader(mut reader: Reader<File>) -> Self {
 		let headers_row = reader.headers().unwrap().clone();
-		let records = reader.into_records().map(|r| {
-			let row_result: RowResult = match r {
-				Ok(row) => Ok(row),
-				Err(err) => Err(Error::Csv),
-			};
-			row_result
-		});
-		Self {
+		let row_iterator = RowIter::from_records(reader.into_records());
+		PipelineBuilder {
 			headers: Headers::from(headers_row),
-			chain: Chain::new(Box::new(records)),
+			iterator: Box::new(row_iterator),
 		}
 	}
 
@@ -55,44 +48,63 @@ impl PipelineBuilder {
 	/// ```
 	pub fn add_col<F>(mut self, name: &str, get_value: F) -> Self
 	where
-		F: FnMut(&Headers, &Row) -> Result<String, Error>,
+		F: FnMut(&Headers, &Row) -> Result<String, Error> + 'a,
 	{
 		self.headers.push_field(name);
 
-		struct State<F> {
-			get_value: F,
-			headers: Headers,
-		}
-		let stateful_chain = self.chain.with_state(State {
-			get_value,
+		let add_col = AddCol {
+			iterator: self.iterator,
+			f: get_value,
 			headers: self.headers.clone(),
-		});
-		let new_chain = stateful_chain.map(|row_result, state| {
-			println!("ADDCOL-map");
-			let mut row = row_result?;
-			let value = (state.get_value)(&state.headers, &row)?;
-			row.push_field(&value);
-			Ok(row)
-		});
+		};
 
-		self.chain = new_chain;
+		self.iterator = Box::new(add_col);
 
 		self
 	}
 
-	pub fn build(self) -> Pipeline {
+	pub fn build(self) -> Pipeline<'a> {
 		Pipeline {
 			headers: self.headers,
-			iterator: Box::new(self.chain),
+			iterator: Box::new(self.iterator),
 		}
 	}
 }
 
-pub struct Pipeline {
-	pub headers: Headers,
-	pub iterator: BoxedIterator,
+struct AddCol<I, F: FnMut(&Headers, &Row) -> Result<String, Error>> {
+	iterator: I,
+	f: F,
+	headers: Headers,
 }
-impl Iterator for Pipeline {
+impl<I, F> Iterator for AddCol<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&Headers, &Row) -> Result<String, Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next() {
+			Some(Ok(row)) => row,
+			Some(Err(e)) => return Some(Err(e)),
+			None => return None,
+		};
+		match (self.f)(&self.headers, &row) {
+			Ok(value) => {
+				let mut row = row;
+				row.push_field(&value);
+				Some(Ok(row))
+			}
+			Err(e) => Some(Err(e)),
+		}
+	}
+}
+
+pub struct Pipeline<'a> {
+	pub headers: Headers,
+	pub iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
+}
+impl<'a> Iterator for Pipeline<'a> {
 	type Item = RowResult;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -107,17 +119,24 @@ mod tests {
 	#[test]
 	fn add_col() {
 		let mut pipeline = PipelineBuilder::from_path("test/Countries.csv")
-			.add_col("Language", |_headers, _row| Ok("".to_string()))
+			.add_col("Language", |_headers, row| match row.get(1) {
+				Some("Norway") => Ok("Norwegian".to_string()),
+				_ => Ok("Unknown".to_string()),
+			})
 			.build();
 
 		let mut writer = csv::Writer::from_writer(vec![]);
 		writer.write_record(&pipeline.headers).unwrap();
-		println!("{:?}", pipeline.headers.get_row());
 		while let Some(item) = pipeline.next() {
-			println!("{:?}", item.clone().unwrap());
 			writer.write_record(&item.unwrap()).unwrap();
 		}
-		let s = String::from_utf8(writer.into_inner().unwrap()).unwrap();
-		print!("{}", s);
+		let csv_str = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+
+		assert_eq!(
+			csv_str,
+			"ID,Country,Language\n\
+			1,Norway,Norwegian\n\
+			2,Tuvalu,Unknown\n"
+		);
 	}
 }
