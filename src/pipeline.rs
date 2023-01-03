@@ -1,7 +1,10 @@
 use super::headers::Headers;
-use crate::{Error, Row, RowIter, RowResult};
-use csv::{Reader, ReaderBuilder};
+use crate::pipeline_iterators::{AddCol, Flush};
+use crate::target::Target;
+use crate::{Error, Row, RowResult};
+use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use std::fs::File;
+use std::io;
 use std::path::Path;
 
 pub struct PipelineBuilder<'a> {
@@ -51,15 +54,17 @@ impl<'a> PipelineBuilder<'a> {
 		F: FnMut(&Headers, &Row) -> Result<String, Error> + 'a,
 	{
 		self.headers.push_field(name);
-
-		let add_col = AddCol {
+		self.iterator = Box::new(AddCol {
 			iterator: self.iterator,
 			f: get_value,
 			headers: self.headers.clone(),
-		};
+		});
+		self
+	}
 
-		self.iterator = Box::new(add_col);
-
+	pub fn flush(mut self, target: impl Target + 'a) -> Self {
+		let flush = Flush::new(self.iterator, target, self.headers.clone());
+		self.iterator = Box::new(flush);
 		self
 	}
 
@@ -71,38 +76,23 @@ impl<'a> PipelineBuilder<'a> {
 	}
 }
 
-struct AddCol<I, F: FnMut(&Headers, &Row) -> Result<String, Error>> {
-	iterator: I,
-	f: F,
-	headers: Headers,
-}
-impl<I, F> Iterator for AddCol<I, F>
-where
-	I: Iterator<Item = RowResult>,
-	F: FnMut(&Headers, &Row) -> Result<String, Error>,
-{
-	type Item = RowResult;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let row = match self.iterator.next() {
-			Some(Ok(row)) => row,
-			Some(Err(e)) => return Some(Err(e)),
-			None => return None,
-		};
-		match (self.f)(&self.headers, &row) {
-			Ok(value) => {
-				let mut row = row;
-				row.push_field(&value);
-				Some(Ok(row))
-			}
-			Err(e) => Some(Err(e)),
-		}
-	}
-}
-
 pub struct Pipeline<'a> {
 	pub headers: Headers,
 	pub iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
+}
+
+impl<'a> Pipeline<'a> {
+	/// Advances the iterator until an error is found.
+	///
+	/// Returns `None` when the iterator is finished.
+	pub fn next_error(&mut self) -> Option<Error> {
+		while let Some(item) = self.next() {
+			if let Err(err) = item {
+				return Some(err);
+			}
+		}
+		None
+	}
 }
 impl<'a> Iterator for Pipeline<'a> {
 	type Item = RowResult;
@@ -112,31 +102,22 @@ impl<'a> Iterator for Pipeline<'a> {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use crate::PipelineBuilder;
+pub struct RowIter<R: io::Read> {
+	inner: StringRecordsIntoIter<R>,
+}
+impl<R: io::Read> RowIter<R> {
+	pub fn from_records(records: StringRecordsIntoIter<R>) -> Self {
+		RowIter { inner: records }
+	}
+}
+impl<R: io::Read> Iterator for RowIter<R> {
+	type Item = RowResult;
 
-	#[test]
-	fn add_col() {
-		let mut pipeline = PipelineBuilder::from_path("test/Countries.csv")
-			.add_col("Language", |_headers, row| match row.get(1) {
-				Some("Norway") => Ok("Norwegian".to_string()),
-				_ => Ok("Unknown".to_string()),
+	fn next(&mut self) -> Option<Self::Item> {
+		self.inner.next().map(|result| {
+			result.map_err(|err| {
+				return Error::from(err);
 			})
-			.build();
-
-		let mut writer = csv::Writer::from_writer(vec![]);
-		writer.write_record(&pipeline.headers).unwrap();
-		while let Some(item) = pipeline.next() {
-			writer.write_record(&item.unwrap()).unwrap();
-		}
-		let csv_str = String::from_utf8(writer.into_inner().unwrap()).unwrap();
-
-		assert_eq!(
-			csv_str,
-			"ID,Country,Language\n\
-			1,Norway,Norwegian\n\
-			2,Tuvalu,Unknown\n"
-		);
+		})
 	}
 }

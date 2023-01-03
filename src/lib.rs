@@ -1,38 +1,51 @@
-mod chain;
 mod headers;
 mod pipeline;
+mod pipeline_iterators;
+pub mod target;
 
-use std::io;
-
-use csv::StringRecordsIntoIter;
 pub use headers::Headers;
 pub use pipeline::{Pipeline, PipelineBuilder};
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Error {
-	DuplicatedColumn(String),
-	Csv,
-}
-
 pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
 
-pub struct RowIter<R: io::Read> {
-	inner: StringRecordsIntoIter<R>,
+#[derive(Debug)]
+pub enum Error {
+	Example,
+	Csv(csv::Error),
+	Io(std::io::Error),
 }
-impl<R: io::Read> RowIter<R> {
-	pub fn from_records(records: StringRecordsIntoIter<R>) -> Self {
-		RowIter { inner: records }
+impl From<csv::Error> for Error {
+	fn from(error: csv::Error) -> Error {
+		Error::Csv(error)
 	}
 }
-impl<R: io::Read> Iterator for RowIter<R> {
-	type Item = RowResult;
 
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next().map(|result| {
-			result.map_err(|err| {
-				return Error::Csv;
-			})
-		})
+impl From<std::io::Error> for Error {
+	fn from(error: std::io::Error) -> Error {
+		Error::Io(error)
 	}
+}
+
+#[test]
+fn test_pipeline() {
+	let mut csv_str = String::new();
+	let mut pipeline = PipelineBuilder::from_path("test/Countries.csv")
+		.add_col("Language", |_headers, row| match row.get(1) {
+			Some("Norway") => Ok("Norwegian".to_string()),
+			_ => Ok("Unknown".to_string()),
+		})
+		.flush(target::StringTarget::new(&mut csv_str))
+		.build();
+
+	while let Some(err) = pipeline.next_error() {
+		eprintln!("Error: {err:?}");
+	}
+	drop(pipeline);
+
+	assert_eq!(
+		csv_str,
+		"ID,Country,Language\n\
+			1,Norway,Norwegian\n\
+			2,Tuvalu,Unknown\n"
+	);
 }
