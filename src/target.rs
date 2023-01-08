@@ -78,12 +78,31 @@ impl Target for StderrTarget {
 	}
 }
 
-pub struct StringTarget<'a> {
+pub struct StringWriter<'a> {
 	s: &'a mut String,
+}
+impl<'a> io::Write for StringWriter<'a> {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		match std::str::from_utf8(buf) {
+			Ok(s) => {
+				self.s.push_str(s);
+				Ok(buf.len())
+			}
+			Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
+		}
+	}
+	fn flush(&mut self) -> io::Result<()> {
+		Ok(())
+	}
+}
+
+pub struct StringTarget<'a> {
+	writer: csv::Writer<StringWriter<'a>>,
 }
 impl<'a> StringTarget<'a> {
 	pub fn new(s: &'a mut String) -> Self {
-		Self { s }
+		let writer = WriterBuilder::new().from_writer(StringWriter { s });
+		Self { writer }
 	}
 }
 impl<'a> Target for StringTarget<'a> {
@@ -91,11 +110,7 @@ impl<'a> Target for StringTarget<'a> {
 		self.write_row(headers.get_row())
 	}
 	fn write_row(&mut self, row: &Row) -> Result<(), Error> {
-		let mut wtr = csv::Writer::from_writer(vec![]);
-		wtr.write_record(row)?;
-		// not sure if this unwrap is safe
-		let row_s = String::from_utf8(wtr.into_inner().unwrap()).unwrap();
-		*self.s += &row_s;
+		self.writer.write_record(row)?;
 		Ok(())
 	}
 }
