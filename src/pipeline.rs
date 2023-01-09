@@ -1,5 +1,5 @@
 use super::headers::Headers;
-use crate::pipeline_iterators::{AddCol, Flush};
+use crate::pipeline_iterators::{AddCol, Flush, Map};
 use crate::target::Target;
 use crate::{Error, Row, RowResult};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
@@ -55,6 +55,18 @@ impl<'a> PipelineBuilder<'a> {
 	{
 		self.headers.push_field(name);
 		self.iterator = Box::new(AddCol {
+			iterator: self.iterator,
+			f: get_value,
+			headers: self.headers.clone(),
+		});
+		self
+	}
+
+	pub fn map<F>(mut self, get_value: F) -> Self
+	where
+		F: FnMut(&Headers, Row) -> Result<Row, Error> + 'a,
+	{
+		self.iterator = Box::new(Map {
 			iterator: self.iterator,
 			f: get_value,
 			headers: self.headers.clone(),

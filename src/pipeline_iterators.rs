@@ -30,6 +30,30 @@ where
 	}
 }
 
+pub struct Map<I, F: FnMut(&Headers, Row) -> Result<Row, Error>> {
+	pub iterator: I,
+	pub f: F,
+	pub headers: Headers,
+}
+impl<I, F> Iterator for Map<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&Headers, Row) -> Result<Row, Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next()? {
+			Ok(row) => row,
+			Err(e) => return Some(Err(e)),
+		};
+		match (self.f)(&self.headers, row) {
+			Ok(value) => Some(Ok(value)),
+			Err(e) => Some(Err(e)),
+		}
+	}
+}
+
 pub struct Flush<I, T> {
 	pub iterator: I,
 	pub target: T,
