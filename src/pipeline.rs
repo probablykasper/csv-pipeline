@@ -7,16 +7,16 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-pub struct PipelineBuilder<'a> {
+pub struct Pipeline<'a> {
 	pub headers: Headers,
 	iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
 }
 
-impl<'a> PipelineBuilder<'a> {
+impl<'a> Pipeline<'a> {
 	pub fn from_reader(mut reader: Reader<File>) -> Self {
 		let headers_row = reader.headers().unwrap().clone();
 		let row_iterator = RowIter::from_records(reader.into_records());
-		PipelineBuilder {
+		Pipeline {
 			headers: Headers::from(headers_row),
 			iterator: Box::new(row_iterator),
 		}
@@ -42,9 +42,9 @@ impl<'a> PipelineBuilder<'a> {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::PipelineBuilder;
+	/// use csv_pipeline::Pipeline;
 	///
-	/// PipelineBuilder::from_path("test/Countries.csv")
+	/// Pipeline::from_path("test/Countries.csv")
 	///   .add_col("Language", |headers, row| {
 	///     Ok("".to_string())
 	///   });
@@ -62,14 +62,14 @@ impl<'a> PipelineBuilder<'a> {
 		self
 	}
 
-	/// Maps each row
+	/// Maps each row.
 	///
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::PipelineBuilder;
+	/// use csv_pipeline::Pipeline;
 	///
-	/// PipelineBuilder::from_path("test/Countries.csv")
+	/// Pipeline::from_path("test/Countries.csv")
 	///   .map(|headers, row| {
 	///     Ok(row.into_iter().map(|field| field.to_uppercase()).collect())
 	///   });
@@ -86,14 +86,14 @@ impl<'a> PipelineBuilder<'a> {
 		self
 	}
 
-	/// Maps each field of a column
+	/// Maps each field of a column.
 	///
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::PipelineBuilder;
+	/// use csv_pipeline::Pipeline;
 	///
-	/// PipelineBuilder::from_path("test/Countries.csv")
+	/// Pipeline::from_path("test/Countries.csv")
 	///   .map_col("Country", |field| {
 	/// 	  Ok(field.to_uppercase())
 	///   });
@@ -117,20 +117,30 @@ impl<'a> PipelineBuilder<'a> {
 		self
 	}
 
-	pub fn build(self) -> Pipeline<'a> {
-		Pipeline {
+	/// Turn the pipeline into an iterator.
+	/// You can also do this using `pipeline.into_iter()`.
+	pub fn build(self) -> PipelineIter<'a> {
+		PipelineIter {
 			headers: self.headers,
 			iterator: Box::new(self.iterator),
 		}
 	}
 }
+impl<'a> IntoIterator for Pipeline<'a> {
+	type Item = RowResult;
+	type IntoIter = PipelineIter<'a>;
 
-pub struct Pipeline<'a> {
+	fn into_iter(self) -> Self::IntoIter {
+		self.build()
+	}
+}
+
+pub struct PipelineIter<'a> {
 	pub headers: Headers,
 	pub iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
 }
 
-impl<'a> Pipeline<'a> {
+impl<'a> PipelineIter<'a> {
 	/// Advances the iterator until an error is found.
 	///
 	/// Returns `None` when the iterator is finished.
@@ -143,7 +153,7 @@ impl<'a> Pipeline<'a> {
 		None
 	}
 }
-impl<'a> Iterator for Pipeline<'a> {
+impl<'a> Iterator for PipelineIter<'a> {
 	type Item = RowResult;
 
 	fn next(&mut self) -> Option<Self::Item> {

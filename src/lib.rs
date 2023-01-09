@@ -4,7 +4,7 @@ mod pipeline_iterators;
 pub mod target;
 
 pub use headers::Headers;
-pub use pipeline::{Pipeline, PipelineBuilder};
+pub use pipeline::{Pipeline, PipelineIter};
 pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
 
@@ -30,7 +30,7 @@ impl From<std::io::Error> for Error {
 #[test]
 fn test_pipeline() {
 	let mut csv_str = String::new();
-	let mut pipeline = PipelineBuilder::from_path("test/Countries.csv")
+	let mut pipeline = Pipeline::from_path("test/Countries.csv")
 		.add_col("Language", |headers, row| {
 			match headers.get_field(row, "Country") {
 				Some("Norway") => Ok("Norwegian".to_string()),
