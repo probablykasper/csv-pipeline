@@ -27,6 +27,10 @@ impl Headers {
 		self.indexes.get(name).and_then(|index| row.get(*index))
 	}
 
+	pub fn get_index(&self, name: &str) -> Option<usize> {
+		self.indexes.get(name).copied()
+	}
+
 	pub fn get_row(&self) -> &Row {
 		&self.row
 	}

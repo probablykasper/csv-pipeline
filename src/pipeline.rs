@@ -1,5 +1,5 @@
 use super::headers::Headers;
-use crate::pipeline_iterators::{AddCol, Flush, Map};
+use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow};
 use crate::target::Target;
 use crate::{Error, Row, RowResult};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
@@ -62,14 +62,51 @@ impl<'a> PipelineBuilder<'a> {
 		self
 	}
 
-	pub fn map<F>(mut self, get_value: F) -> Self
+	/// Maps each row
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::PipelineBuilder;
+	///
+	/// PipelineBuilder::from_path("test/Countries.csv")
+	///   .map(|headers, row| {
+	///     Ok(row.into_iter().map(|field| field.to_uppercase()).collect())
+	///   });
+	/// ```
+	pub fn map<F>(mut self, get_row: F) -> Self
 	where
 		F: FnMut(&Headers, Row) -> Result<Row, Error> + 'a,
 	{
-		self.iterator = Box::new(Map {
+		self.iterator = Box::new(MapRow {
+			iterator: self.iterator,
+			f: get_row,
+			headers: self.headers.clone(),
+		});
+		self
+	}
+
+	/// Maps each field of a column
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::PipelineBuilder;
+	///
+	/// PipelineBuilder::from_path("test/Countries.csv")
+	///   .map_col("Country", |field| {
+	/// 	  Ok(field.to_uppercase())
+	///   });
+	/// ```
+	pub fn map_col<F>(mut self, col: &str, get_value: F) -> Self
+	where
+		F: FnMut(&str) -> Result<String, Error> + 'a,
+	{
+		self.iterator = Box::new(MapCol {
 			iterator: self.iterator,
 			f: get_value,
-			headers: self.headers.clone(),
+			name: col.to_string(),
+			index: self.headers.get_index(col),
 		});
 		self
 	}

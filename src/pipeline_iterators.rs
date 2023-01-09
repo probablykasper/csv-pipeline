@@ -15,13 +15,12 @@ where
 	type Item = RowResult;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let row = match self.iterator.next()? {
+		let mut row = match self.iterator.next()? {
 			Ok(row) => row,
 			Err(e) => return Some(Err(e)),
 		};
 		match (self.f)(&self.headers, &row) {
 			Ok(value) => {
-				let mut row = row;
 				row.push_field(&value);
 				Some(Ok(row))
 			}
@@ -30,12 +29,12 @@ where
 	}
 }
 
-pub struct Map<I, F: FnMut(&Headers, Row) -> Result<Row, Error>> {
+pub struct MapRow<I, F: FnMut(&Headers, Row) -> Result<Row, Error>> {
 	pub iterator: I,
 	pub f: F,
 	pub headers: Headers,
 }
-impl<I, F> Iterator for Map<I, F>
+impl<I, F> Iterator for MapRow<I, F>
 where
 	I: Iterator<Item = RowResult>,
 	F: FnMut(&Headers, Row) -> Result<Row, Error>,
@@ -51,6 +50,42 @@ where
 			Ok(value) => Some(Ok(value)),
 			Err(e) => Some(Err(e)),
 		}
+	}
+}
+
+pub struct MapCol<I, F: FnMut(&str) -> Result<String, Error>> {
+	pub iterator: I,
+	pub f: F,
+	pub name: String,
+	pub index: Option<usize>,
+}
+impl<I, F> Iterator for MapCol<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&str) -> Result<String, Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next()? {
+			Ok(row) => row,
+			Err(e) => return Some(Err(e)),
+		};
+		let mut row_vec: Vec<_> = row.into_iter().collect();
+		let index = match self.index {
+			Some(index) => index,
+			None => return Some(Err(Error::MissingColumn(self.name.clone()))),
+		};
+		let field = match row_vec.get_mut(index) {
+			Some(field) => field,
+			None => return Some(Err(Error::MissingColumn(self.name.clone()))),
+		};
+		let new_value = match (self.f)(field) {
+			Ok(value) => value,
+			Err(e) => return Some(Err(e)),
+		};
+		*field = &new_value;
+		Some(Ok(row_vec.into()))
 	}
 }
 
