@@ -152,6 +152,14 @@ impl<'a> PipelineIter<'a> {
 		}
 		None
 	}
+
+	/// Run through the whole iterator. Returns the first error found, if any
+	pub fn run(&mut self) -> Result<(), Error> {
+		while let Some(item) = self.next() {
+			item?;
+		}
+		Ok(())
+	}
 }
 impl<'a> Iterator for PipelineIter<'a> {
 	type Item = RowResult;
