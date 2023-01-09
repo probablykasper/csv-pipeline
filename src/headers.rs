@@ -23,6 +23,10 @@ impl Headers {
 		self.indexes.contains_key(name)
 	}
 
+	pub fn get_field<'a>(&self, row: &'a Row, name: &str) -> Option<&'a str> {
+		self.indexes.get(name).and_then(|index| row.get(*index))
+	}
+
 	pub fn get_row(&self) -> &Row {
 		&self.row
 	}
