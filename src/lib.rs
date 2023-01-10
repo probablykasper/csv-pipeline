@@ -1,19 +1,20 @@
 mod headers;
 mod pipeline;
 mod pipeline_iterators;
-pub mod target;
+mod target;
 
 pub use headers::Headers;
 pub use pipeline::{Pipeline, PipelineIter};
+pub use target::{PathTarget, StderrTarget, StdoutTarget, StringTarget, Target};
 pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-	Example,
 	Csv(csv::Error),
 	Io(std::io::Error),
 	MissingColumn(String),
+	DuplicateColumn(String),
 }
 impl From<csv::Error> for Error {
 	fn from(error: csv::Error) -> Error {
@@ -29,22 +30,17 @@ impl From<std::io::Error> for Error {
 
 #[test]
 fn test_pipeline() {
-	let mut csv_str = String::new();
-	let mut pipeline = Pipeline::from_path("test/Countries.csv")
+	let csv_str = Pipeline::from_path("test/Countries.csv")
+		.unwrap()
 		.add_col("Language", |headers, row| {
 			match headers.get_field(row, "Country") {
-				Some("Norway") => Ok("Norwegian".to_string()),
-				_ => Ok("Unknown".to_string()),
+				Some("Norway") => Ok("Norwegian"),
+				_ => Ok("Unknown"),
 			}
 		})
 		.map_col("Country", |id_str| Ok(id_str.to_uppercase()))
-		.flush(target::StringTarget::new(&mut csv_str))
-		.build();
-
-	while let Some(err) = pipeline.next_error() {
-		eprintln!("Error: {err:?}");
-	}
-	drop(pipeline);
+		.collect_into_string()
+		.unwrap();
 
 	assert_eq!(
 		csv_str,

@@ -1,8 +1,9 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow};
 use crate::target::Target;
-use crate::{Error, Row, RowResult};
+use crate::{Error, Row, RowResult, StringTarget};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
+use std::borrow::BorrowMut;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -13,17 +14,17 @@ pub struct Pipeline<'a> {
 }
 
 impl<'a> Pipeline<'a> {
-	pub fn from_reader(mut reader: Reader<File>) -> Self {
+	pub fn from_reader(mut reader: Reader<File>) -> Result<Self, Error> {
 		let headers_row = reader.headers().unwrap().clone();
 		let row_iterator = RowIter::from_records(reader.into_records());
-		Pipeline {
-			headers: Headers::from(headers_row),
+		Ok(Pipeline {
+			headers: Headers::from_row(headers_row)?,
 			iterator: Box::new(row_iterator),
-		}
+		})
 	}
 
 	/// Create a pipeline from a CSV or TSV file.
-	pub fn from_path<P: AsRef<Path>>(file_path: P) -> Self {
+	pub fn from_path<P: AsRef<Path>>(file_path: P) -> Result<Self, Error> {
 		let ext = file_path.as_ref().extension().unwrap_or_default();
 		let delimiter = match ext.to_string_lossy().as_ref() {
 			"tsv" => b'\t',
@@ -44,14 +45,15 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	/// use csv_pipeline::Pipeline;
 	///
-	/// Pipeline::from_path("test/Countries.csv")
-	///   .add_col("Language", |headers, row| {
-	///     Ok("".to_string())
+	/// Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .add_col("C", |headers, row| {
+	///     Ok("1")
 	///   });
 	/// ```
 	pub fn add_col<F>(mut self, name: &str, get_value: F) -> Self
 	where
-		F: FnMut(&Headers, &Row) -> Result<String, Error> + 'a,
+		F: FnMut(&Headers, &Row) -> Result<&'a str, Error> + 'a,
 	{
 		self.headers.push_field(name);
 		self.iterator = Box::new(AddCol {
@@ -69,10 +71,16 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	/// use csv_pipeline::Pipeline;
 	///
-	/// Pipeline::from_path("test/Countries.csv")
+	/// let csv = Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
 	///   .map(|headers, row| {
-	///     Ok(row.into_iter().map(|field| field.to_uppercase()).collect())
-	///   });
+	///     Ok(row.into_iter().map(|field| field.to_string() + "0").collect())
+	///   })
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "A,B\n10,20\n"
+	/// );
 	/// ```
 	pub fn map<F>(mut self, get_row: F) -> Self
 	where
@@ -93,10 +101,18 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	/// use csv_pipeline::Pipeline;
 	///
-	/// Pipeline::from_path("test/Countries.csv")
-	///   .map_col("Country", |field| {
-	/// 	  Ok(field.to_uppercase())
-	///   });
+	/// let csv = Pipeline::from_path("test/Countries.csv")
+	///   .unwrap()
+	///   .map_col("Country", |field| Ok(field.to_uppercase()))
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(
+	///   csv,
+	///   "ID,Country\n\
+	///     1,NORWAY\n\
+	///     2,TUVALU\n"
+	/// );
 	/// ```
 	pub fn map_col<F>(mut self, col: &str, get_value: F) -> Self
 	where
@@ -111,9 +127,61 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
+	/// Write to the specified [`Target`].
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::{Pipeline, StringTarget};
+	///
+	/// let mut csv = String::new();
+	/// Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .flush(StringTarget::new(&mut csv))
+	///   .run()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "A,B\n1,2\n");
+	/// ```
 	pub fn flush(mut self, target: impl Target + 'a) -> Self {
 		let flush = Flush::new(self.iterator, target, self.headers.clone());
 		self.iterator = Box::new(flush);
+		self
+	}
+
+	/// Panics if a new name already exists
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::{Pipeline, StringTarget};
+	///
+	/// let csv = Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .rename_cols(|i, name| {
+	///     match name {
+	///       "A" => "X",
+	///       name => name,
+	///     }
+	///   })
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "X,B\n1,2\n");
+	/// ```
+	pub fn rename_cols<R>(mut self, mut get_name: R) -> Self
+	where
+		R: FnMut(usize, &str) -> &str,
+	{
+		let mut new_headers = Headers::new();
+		for (i, name) in self.headers.into_iter().enumerate().borrow_mut() {
+			let new_name = get_name(i, name);
+			match new_headers.push_field(new_name) {
+				true => (),
+				false => panic!("New column name already exists"),
+			}
+		}
+		self.headers = new_headers;
 		self
 	}
 
@@ -124,6 +192,17 @@ impl<'a> Pipeline<'a> {
 			headers: self.headers,
 			iterator: Box::new(self.iterator),
 		}
+	}
+
+	/// Shorthand for `.build().run()`.
+	pub fn run(self) -> Result<(), Error> {
+		self.build().run()
+	}
+
+	pub fn collect_into_string(self) -> Result<String, Error> {
+		let mut csv = String::new();
+		self.flush(StringTarget::new(&mut csv)).run()?;
+		Ok(csv)
 	}
 }
 impl<'a> IntoIterator for Pipeline<'a> {

@@ -2,15 +2,15 @@ use super::headers::Headers;
 use crate::target::Target;
 use crate::{Error, Row, RowResult};
 
-pub struct AddCol<I, F: FnMut(&Headers, &Row) -> Result<String, Error>> {
+pub struct AddCol<'a, I, F: FnMut(&Headers, &Row) -> Result<&'a str, Error>> {
 	pub iterator: I,
 	pub f: F,
 	pub headers: Headers,
 }
-impl<I, F> Iterator for AddCol<I, F>
+impl<'a, I, F> Iterator for AddCol<'a, I, F>
 where
 	I: Iterator<Item = RowResult>,
-	F: FnMut(&Headers, &Row) -> Result<String, Error>,
+	F: FnMut(&Headers, &Row) -> Result<&'a str, Error>,
 {
 	type Item = RowResult;
 

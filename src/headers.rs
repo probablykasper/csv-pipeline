@@ -1,4 +1,4 @@
-use crate::Row;
+use crate::{Error, Row};
 use csv::StringRecordIter;
 use std::collections::HashMap;
 
@@ -8,6 +8,14 @@ pub struct Headers {
 	row: Row,
 }
 impl Headers {
+	pub fn new() -> Self {
+		Headers {
+			indexes: HashMap::new(),
+			row: Row::new(),
+		}
+	}
+
+	/// Returns false if the field already exists
 	pub fn push_field(&mut self, name: &str) -> bool {
 		if self.indexes.contains_key(name) {
 			return false;
@@ -34,19 +42,19 @@ impl Headers {
 	pub fn get_row(&self) -> &Row {
 		&self.row
 	}
-}
-impl From<Row> for Headers {
-	fn from(row: Row) -> Headers {
-		Headers {
-			indexes: row
-				.iter()
-				.enumerate()
-				.map(|(index, entry)| (entry.to_string(), index))
-				.collect(),
-			row,
+
+	pub fn from_row(row: Row) -> Result<Self, Error> {
+		let mut header = Headers::new();
+		for field in &row {
+			let added = header.push_field(field);
+			if !added {
+				return Err(Error::DuplicateColumn(field.to_string()));
+			}
 		}
+		Ok(header)
 	}
 }
+
 impl<'a> IntoIterator for &'a Headers {
 	type Item = &'a str;
 	type IntoIter = StringRecordIter<'a>;
