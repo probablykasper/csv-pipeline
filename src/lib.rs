@@ -38,13 +38,14 @@ fn test_pipeline() {
 				_ => Ok("Unknown"),
 			}
 		})
-		.map_col("Country", |id_str| Ok(id_str.to_uppercase()))
+		.rename_col("Country", "COUNTRY")
+		.map_col("COUNTRY", |id_str| Ok(id_str.to_uppercase()))
 		.collect_into_string()
 		.unwrap();
 
 	assert_eq!(
 		csv_str,
-		"ID,Country,Language\n\
+		"ID,COUNTRY,Language\n\
 			1,NORWAY,Norwegian\n\
 			2,TUVALU,Unknown\n"
 	);

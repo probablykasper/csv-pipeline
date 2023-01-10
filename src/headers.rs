@@ -15,6 +15,22 @@ impl Headers {
 		}
 	}
 
+	/// Returns `false` if `from` is non-existant or if the new name already exists
+	pub fn rename(&mut self, from: &str, to: &str) -> Result<(), Error> {
+		if self.contains(to) {
+			return Err(Error::DuplicateColumn(to.to_string()));
+		}
+		let index = match self.indexes.remove(from) {
+			Some(index) => index,
+			None => return Err(Error::MissingColumn(from.to_string())),
+		};
+		self.indexes.insert(to.to_string(), index);
+		let mut row_vec: Vec<_> = self.row.into_iter().collect();
+		row_vec[index] = to;
+		self.row = row_vec.into_iter().collect();
+		Ok(())
+	}
+
 	/// Returns false if the field already exists
 	pub fn push_field(&mut self, name: &str) -> bool {
 		if self.indexes.contains_key(name) {

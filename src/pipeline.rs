@@ -158,6 +158,29 @@ impl<'a> Pipeline<'a> {
 	///
 	/// let csv = Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
+	///   .rename_col("A", "X")
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "X,B\n1,2\n");
+	/// ```
+	pub fn rename_col(mut self, from: &str, to: &str) -> Self {
+		match self.headers.rename(from, to) {
+			Ok(()) => (),
+			Err(e) => panic!("{:?}", e),
+		};
+		self
+	}
+
+	/// Panics if a new name already exists
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::{Pipeline, StringTarget};
+	///
+	/// let csv = Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
 	///   .rename_cols(|i, name| {
 	///     match name {
 	///       "A" => "X",
