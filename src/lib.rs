@@ -93,7 +93,7 @@ mod transform;
 
 pub use headers::Headers;
 pub use pipeline::{Pipeline, PipelineIter};
-pub use transform::Transformer;
+pub use transform::{Transform, Transformer};
 
 pub mod target;
 /// Helper for building a target to flush data into
