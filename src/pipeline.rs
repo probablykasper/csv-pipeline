@@ -1,11 +1,11 @@
 use super::headers::Headers;
-use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow};
+use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow, TransformInto};
 use crate::target::Target;
 use crate::transform::Transform;
 use crate::{Error, Row, RowResult, StringTarget};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use std::borrow::BorrowMut;
-use std::fs::File;
+use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ pub struct Pipeline<'a> {
 }
 
 impl<'a> Pipeline<'a> {
-	pub fn from_reader(mut reader: Reader<File>) -> Result<Self, Error> {
+	pub fn from_reader<R: io::Read + 'a>(mut reader: Reader<R>) -> Result<Self, Error> {
 		let headers_row = reader.headers().unwrap().clone();
 		let row_iterator = RowIter::from_records(reader.into_records());
 		Ok(Pipeline {
@@ -187,10 +187,36 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
-	pub fn transform_into<T>(self, transformers: T) -> Self
+	/// Group and reduce rows
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::{Pipeline, StringTarget};
+	///
+	/// let csv = Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .rename_cols(|i, name| {
+	///     match name {
+	///       "A" => "X",
+	///       name => name,
+	///     }
+	///   })
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "X,B\n1,2\n");
+	/// ```
+	pub fn transform_into<T>(mut self, transformers: T) -> Self
 	where
 		T: IntoIterator<Item = Box<dyn Transform>>,
 	{
+		self.iterator = Box::new(TransformInto {
+			iterator: self.iterator,
+			groups: HashMap::new(),
+			transformers: transformers.into_iter().collect(),
+			headers: self.headers.clone(),
+		});
 		self
 	}
 

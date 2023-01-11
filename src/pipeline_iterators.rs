@@ -1,11 +1,9 @@
-use std::collections::hash_map::{DefaultHasher, Entry};
-use std::collections::HashMap;
-use std::hash::Hasher;
-
 use super::headers::Headers;
 use crate::target::Target;
-use crate::transform::compute_hash;
-use crate::{Error, Row, RowResult, Transform};
+use crate::transform::{compute_hash, Reduce, Transform};
+use crate::{Error, Row, RowResult};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 pub struct AddCol<'a, I, F: FnMut(&Headers, &Row) -> Result<&'a str, Error>> {
 	pub iterator: I,
@@ -94,22 +92,34 @@ where
 	}
 }
 
-pub struct TransformInto<I> {
+pub struct TransformInto<'a, I> {
 	pub iterator: I,
-	pub groups: HashMap<u64, Vec<Box<dyn Transform>>>,
-	pub transformers: Vec<Box<dyn Transform>>,
+	pub groups: HashMap<u64, Vec<Box<dyn Reduce + 'a>>>,
+	pub transformers: Vec<Box<dyn Transform + 'a>>,
 	pub headers: Headers,
 }
-impl<I> Iterator for TransformInto<I>
+impl<'a, I> TransformInto<'a, I> {
+	pub fn ensure_group(&'a mut self, hash: u64) {
+		if let Entry::Vacant(entry) = self.groups.entry(hash) {
+			let reducers = self
+				.transformers
+				.iter_mut()
+				.map(|transformer| transformer.new_reducer())
+				.collect();
+			entry.insert(reducers);
+		};
+	}
+}
+impl<'a, I> Iterator for TransformInto<'a, I>
 where
 	I: Iterator<Item = RowResult>,
 {
 	type Item = RowResult;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		// First run iterator into hashmap, then return rows from the hashmap
 		// If any error rows are found, they are returned first
 		if let Some(row_result) = self.iterator.next() {
+			// First run iterator into hashmap
 			let row = match row_result {
 				Ok(row) => row,
 				Err(e) => return Some(Err(e)),
@@ -118,18 +128,27 @@ where
 				Ok(hash) => hash,
 				Err(e) => return Some(Err(e)),
 			};
-			let group_row = self.groups.entry(hash).or_default();
-			for transformer in self.transformers {
-				let result = transformer.add_row(&self.headers, &row);
+			self.ensure_group(hash);
+			let group_row = self.groups.get_mut(&hash).unwrap();
+			for reducer in group_row {
+				let result = reducer.add_row(&self.headers, &row);
 				if let Err(e) = result {
 					return Some(Err(e));
 				}
 			}
-			group_row.push_field(row);
-		} else {
+			return self.next();
 		}
-
-		x
+		// Finally, return rows from the hashmap
+		if let Some(key) = self.groups.keys().next().copied() {
+			let reducers = self.groups.remove(&key).unwrap();
+			let fields: Vec<_> = reducers.iter().map(|reducer| reducer.value()).collect();
+			let row = Row::from(fields);
+			println!("x {row:?}");
+			println!("- {}", reducers.len());
+			Some(Ok(row))
+		} else {
+			None
+		}
 	}
 }
 
