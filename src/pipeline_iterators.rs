@@ -1,6 +1,11 @@
+use std::collections::hash_map::{DefaultHasher, Entry};
+use std::collections::HashMap;
+use std::hash::Hasher;
+
 use super::headers::Headers;
 use crate::target::Target;
-use crate::{Error, Row, RowResult};
+use crate::transform::compute_hash;
+use crate::{Error, Row, RowResult, Transform};
 
 pub struct AddCol<'a, I, F: FnMut(&Headers, &Row) -> Result<&'a str, Error>> {
 	pub iterator: I,
@@ -89,13 +94,51 @@ where
 	}
 }
 
+pub struct TransformInto<I> {
+	pub iterator: I,
+	pub groups: HashMap<u64, Vec<Box<dyn Transform>>>,
+	pub transformers: Vec<Box<dyn Transform>>,
+	pub headers: Headers,
+}
+impl<I> Iterator for TransformInto<I>
+where
+	I: Iterator<Item = RowResult>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		// First run iterator into hashmap, then return rows from the hashmap
+		// If any error rows are found, they are returned first
+		if let Some(row_result) = self.iterator.next() {
+			let row = match row_result {
+				Ok(row) => row,
+				Err(e) => return Some(Err(e)),
+			};
+			let hash = match compute_hash(&self.transformers, &self.headers, &row) {
+				Ok(hash) => hash,
+				Err(e) => return Some(Err(e)),
+			};
+			let group_row = self.groups.entry(hash).or_default();
+			for transformer in self.transformers {
+				let result = transformer.add_row(&self.headers, &row);
+				if let Err(e) = result {
+					return Some(Err(e));
+				}
+			}
+			group_row.push_field(row);
+		} else {
+		}
+
+		x
+	}
+}
+
 pub struct Flush<I, T> {
 	pub iterator: I,
 	pub target: T,
 	/// `None` if headers have been written, `Some` otherwise
 	headers: Option<Headers>,
 }
-
 impl<I, T> Flush<I, T> {
 	pub fn new(iterator: I, target: T, headers: Headers) -> Self {
 		Self {

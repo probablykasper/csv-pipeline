@@ -1,6 +1,7 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow};
 use crate::target::Target;
+use crate::transform::Transform;
 use crate::{Error, Row, RowResult, StringTarget};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use std::borrow::BorrowMut;
@@ -127,28 +128,6 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
-	/// Write to the specified [`Target`].
-	///
-	/// ## Example
-	///
-	/// ```
-	/// use csv_pipeline::{Pipeline, StringTarget};
-	///
-	/// let mut csv = String::new();
-	/// Pipeline::from_path("test/AB.csv")
-	///   .unwrap()
-	///   .flush(StringTarget::new(&mut csv))
-	///   .run()
-	///   .unwrap();
-	///
-	/// assert_eq!(csv, "A,B\n1,2\n");
-	/// ```
-	pub fn flush(mut self, target: impl Target + 'a) -> Self {
-		let flush = Flush::new(self.iterator, target, self.headers.clone());
-		self.iterator = Box::new(flush);
-		self
-	}
-
 	/// Panics if a new name already exists
 	///
 	/// ## Example
@@ -205,6 +184,35 @@ impl<'a> Pipeline<'a> {
 			}
 		}
 		self.headers = new_headers;
+		self
+	}
+
+	pub fn transform_into<T>(self, transformers: T) -> Self
+	where
+		T: IntoIterator<Item = Box<dyn Transform>>,
+	{
+		self
+	}
+
+	/// Write to the specified [`Target`].
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::{Pipeline, StringTarget};
+	///
+	/// let mut csv = String::new();
+	/// Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .flush(StringTarget::new(&mut csv))
+	///   .run()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "A,B\n1,2\n");
+	/// ```
+	pub fn flush(mut self, target: impl Target + 'a) -> Self {
+		let flush = Flush::new(self.iterator, target, self.headers.clone());
+		self.iterator = Box::new(flush);
 		self
 	}
 

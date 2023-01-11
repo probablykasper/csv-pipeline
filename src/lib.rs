@@ -2,10 +2,13 @@ mod headers;
 mod pipeline;
 mod pipeline_iterators;
 mod target;
+mod transform;
 
 pub use headers::Headers;
 pub use pipeline::{Pipeline, PipelineIter};
 pub use target::{PathTarget, StderrTarget, StdoutTarget, StringTarget, Target};
+pub use transform::{Transform, Transformer};
+
 pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
 
@@ -15,6 +18,7 @@ pub enum Error {
 	Io(std::io::Error),
 	MissingColumn(String),
 	DuplicateColumn(String),
+	InvalidField(String),
 }
 impl From<csv::Error> for Error {
 	fn from(error: csv::Error) -> Error {
@@ -38,6 +42,10 @@ fn test_pipeline() {
 				_ => Ok("Unknown"),
 			}
 		})
+		.transform_into([
+			Transformer::new("ID").keep_unique(),
+			Transformer::new("Country").sum(0),
+		])
 		.rename_col("Country", "COUNTRY")
 		.map_col("COUNTRY", |id_str| Ok(id_str.to_uppercase()))
 		.collect_into_string()
