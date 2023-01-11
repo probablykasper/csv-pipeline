@@ -1,8 +1,6 @@
 # CSV Pipeline
 
-⚠️ Work in progress
-
-CSV processing library
+CSV processing library inspired by [csvsc](https://crates.io/crates/csvsc)
 
 [![Crates.io](https://img.shields.io/crates/v/csv-pipeline.svg)](https://crates.io/crates/csv-pipeline)
 [![Documentation](https://docs.rs/csv-pipeline/badge.svg)](https://docs.rs/csv-pipeline)
@@ -23,6 +21,6 @@ cargo test
 1. Update `CHANGELOG.md`
 2. Bump the version number in `Cargo.toml`
 3. Run `cargo test`
-4. Create a git tag in format `v#.#.#`
-5. Add release notes to the generated GitHub release and publish it
-6. Run `cargo publish`
+4. Run `cargo publish`
+5. Create a git tag in format `v#.#.#`
+6. Create GitHub release with release notes
