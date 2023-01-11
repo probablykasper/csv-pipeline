@@ -2,6 +2,8 @@ use crate::{Error, Headers, Row};
 use core::fmt::Display;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::ops::AddAssign;
+use std::str::FromStr;
 
 /// For grouping and reducing rows.
 pub trait Transform {
@@ -50,47 +52,29 @@ impl Transformer {
 			value: "".to_string(),
 		})
 	}
+	/// Sum the values in this column
+	pub fn sum<'a, N>(self, init: N) -> Box<dyn Transform + 'a>
+	where
+		N: Display + AddAssign + FromStr + Clone + 'a,
+	{
+		Box::new(Sum {
+			name: self.name,
+			from_col: self.from_col,
+			value: init,
+		})
+	}
 	/// Reduce the values from this column into a single value using a closure
 	pub fn reduce<'a, R, V>(self, reduce: R, init: V) -> Box<dyn Transform + 'a>
 	where
 		R: FnMut(V, &str) -> Result<V, Error> + 'a,
 		V: Display + Clone + 'a,
 	{
-		Box::new(Closure {
+		Box::new(Reduce {
 			name: self.name,
 			from_col: self.from_col,
 			reduce,
 			value: init,
 		})
-	}
-}
-
-struct Closure<F, V> {
-	name: String,
-	from_col: String,
-	reduce: F,
-	value: V,
-}
-impl<F, V> Transform for Closure<F, V>
-where
-	F: FnMut(V, &str) -> Result<V, Error>,
-	V: Display + Clone,
-{
-	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
-		let field = headers
-			.get_field(row, &self.from_col)
-			.ok_or(Error::MissingColumn(self.from_col.clone()))?
-			.to_string();
-		self.value = (self.reduce)(self.value.clone(), &field)?;
-		Ok(())
-	}
-
-	fn value(&self) -> String {
-		self.value.to_string()
-	}
-
-	fn name(&self) -> String {
-		self.name.clone()
 	}
 }
 
@@ -138,4 +122,63 @@ pub(crate) fn compute_hash<'a>(
 		}
 	}
 	Ok(hasher.finish())
+}
+
+struct Reduce<F, V> {
+	name: String,
+	from_col: String,
+	reduce: F,
+	value: V,
+}
+impl<F, V> Transform for Reduce<F, V>
+where
+	F: FnMut(V, &str) -> Result<V, Error>,
+	V: Display + Clone,
+{
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
+		let field = headers
+			.get_field(row, &self.from_col)
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?
+			.to_string();
+		self.value = (self.reduce)(self.value.clone(), &field)?;
+		Ok(())
+	}
+
+	fn value(&self) -> String {
+		self.value.to_string()
+	}
+
+	fn name(&self) -> String {
+		self.name.clone()
+	}
+}
+
+struct Sum<N> {
+	name: String,
+	from_col: String,
+	value: N,
+}
+impl<V> Transform for Sum<V>
+where
+	V: Display + AddAssign + FromStr + Clone,
+{
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
+		let field = headers
+			.get_field(row, &self.from_col)
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?
+			.to_string();
+		let new: V = match field.parse() {
+			Ok(v) => v,
+			Err(_) => return Err(Error::InvalidField(field)),
+		};
+		self.value += new;
+		Ok(())
+	}
+
+	fn value(&self) -> String {
+		self.value.to_string()
+	}
+	fn name(&self) -> String {
+		self.name.clone()
+	}
 }

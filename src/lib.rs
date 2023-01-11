@@ -63,13 +63,7 @@
 //!       // Keep every Person
 //!       Transformer::new("Person").keep_unique(),
 //!       // Sum the scores into a "Total score" column
-//!       Transformer::new("Total score").from_col("Score").reduce(
-//!         |accumulator, current| {
-//!           let score: u64 = current.parse().unwrap();
-//!           Ok(accumulator + score)
-//!         },
-//!         0,
-//!       ),
+//!       Transformer::new("Total score").from_col("Score").sum(0),
 //!     ]
 //!   })
 //!   .collect_into_string()

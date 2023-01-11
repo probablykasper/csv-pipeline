@@ -136,7 +136,7 @@ impl<'a> Pipeline<'a> {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::{Pipeline, StringTarget};
+	/// use csv_pipeline::Pipeline;
 	///
 	/// let csv = Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
@@ -159,7 +159,7 @@ impl<'a> Pipeline<'a> {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::{Pipeline, StringTarget};
+	/// use csv_pipeline::Pipeline;
 	///
 	/// let csv = Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
@@ -195,7 +195,7 @@ impl<'a> Pipeline<'a> {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::{Pipeline, StringTarget};
+	/// use csv_pipeline::Pipeline;
 	///
 	/// let csv = Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
@@ -258,12 +258,12 @@ impl<'a> Pipeline<'a> {
 	/// ## Example
 	///
 	/// ```
-	/// use csv_pipeline::{Pipeline, StringTarget};
+	/// use csv_pipeline::{Pipeline, Target};
 	///
 	/// let mut csv = String::new();
 	/// Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
-	///   .flush(StringTarget::new(&mut csv))
+	///   .flush(Target::string(&mut csv))
 	///   .run()
 	///   .unwrap();
 	///

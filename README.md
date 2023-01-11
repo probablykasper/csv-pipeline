@@ -5,32 +5,38 @@ CSV processing library inspired by [csvsc](https://crates.io/crates/csvsc)
 [![Crates.io](https://img.shields.io/crates/v/csv-pipeline.svg)](https://crates.io/crates/csv-pipeline)
 [![Documentation](https://docs.rs/csv-pipeline/badge.svg)](https://docs.rs/csv-pipeline)
 
-## Basic Example
+## Example
+
 ```rs
 use csv_pipeline::{Pipeline, Transformer};
 
-// First create a pipeline from a CSV file path
-let csv = Pipeline::from_path("test/Countries.csv")
+let source = "\
+  Person,Score\n\
+  A,1\n\
+  A,8\n\
+  B,3\n\
+  B,4\n";
+let reader = csv::Reader::from_reader(source.as_bytes());
+let csv = Pipeline::from_reader(reader)
   .unwrap()
-  // Add a column with values computed from a closure
-  .add_col("Language", |headers, row| {
-    match headers.get_field(row, "Country") {
-      Some("Norway") => Ok("Norwegian".into()),
-      _ => Ok("Unknown".into()),
-    }
+  .map(|_headers, row| Ok(row))
+  // Transform into a new csv
+  .transform_into(|| {
+    vec![
+      // Keep every Person
+      Transformer::new("Person").keep_unique(),
+      // Sum the scores into a "Total score" column
+      Transformer::new("Total score").from_col("Score").sum(0),
+    ]
   })
-  // Make the "Country" column uppercase
-  .rename_col("Country", "COUNTRY")
-  .map_col("COUNTRY", |id_str| Ok(id_str.to_uppercase()))
-  // Collect the csv into a string
   .collect_into_string()
   .unwrap();
 
 assert_eq!(
   csv,
-  "ID,COUNTRY,Language\n\
-    1,NORWAY,Norwegian\n\
-    2,TUVALU,Unknown\n"
+  "Person,Total score\n\
+    A,9\n\
+    B,7\n"
 );
 ```
 
