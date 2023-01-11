@@ -49,11 +49,15 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	/// use csv_pipeline::Pipeline;
 	///
-	/// Pipeline::from_path("test/AB.csv")
+	/// let csv = Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
 	///   .add_col("C", |headers, row| {
-	///     Ok("1".to_string())
-	///   });
+	///     Ok("3".to_string())
+	///   })
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "A,B,C\n1,2,3\n");
 	/// ```
 	pub fn add_col<F>(mut self, name: &str, get_value: F) -> Self
 	where
