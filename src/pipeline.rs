@@ -51,7 +51,7 @@ impl<'a> Pipeline<'a> {
 	/// Pipeline::from_path("test/AB.csv")
 	///   .unwrap()
 	///   .add_col("C", |headers, row| {
-	///     Ok("1")
+	///     Ok("1".to_string())
 	///   });
 	/// ```
 	pub fn add_col<F>(mut self, name: &str, get_value: F) -> Self

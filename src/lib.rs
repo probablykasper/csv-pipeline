@@ -63,7 +63,7 @@ fn transform() {
 
 	assert_eq!(
 		csv_str,
-		"Person,Score\n\
+		"Person,Total score\n\
 			A,9\n\
 			B,7\n"
 	);
