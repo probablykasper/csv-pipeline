@@ -45,23 +45,18 @@ fn transform() {
 		.from_reader(source.as_bytes());
 	let csv_str = Pipeline::from_reader(reader)
 		.unwrap()
-		.map(|_headers, row| {
-			println!("{row:?}");
-			Ok(row)
-		})
-		.transform_into([
-			Transformer::new("Person").keep_unique(),
-			Transformer::new("Score").reduce(
-				|accumulator, current| {
-					let score: u64 = current.parse().unwrap();
-					Ok(accumulator + score)
-				},
-				0,
-			),
-		])
-		.map(|_headers, row| {
-			println!("{row:?}");
-			Ok(row)
+		.map(|_headers, row| Ok(row))
+		.transform_into(|| {
+			vec![
+				Transformer::new("Person").keep_unique(),
+				Transformer::new("Score").reduce(
+					|accumulator, current| {
+						let score: u64 = current.parse().unwrap();
+						Ok(accumulator + score)
+					},
+					0,
+				),
+			]
 		})
 		.collect_into_string()
 		.unwrap();

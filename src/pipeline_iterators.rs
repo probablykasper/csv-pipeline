@@ -1,9 +1,9 @@
 use super::headers::Headers;
 use crate::target::Target;
-use crate::transform::{compute_hash, Reduce, Transform};
+use crate::transform::{compute_hash, Transform};
 use crate::{Error, Row, RowResult};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 
 pub struct AddCol<'a, I, F: FnMut(&Headers, &Row) -> Result<&'a str, Error>> {
 	pub iterator: I,
@@ -92,43 +92,44 @@ where
 	}
 }
 
-pub struct TransformInto<'a, I> {
+pub struct TransformInto<I, F>
+where
+	F: FnMut() -> Vec<Box<dyn Transform>>,
+{
 	pub iterator: I,
-	pub groups: HashMap<u64, Vec<Box<dyn Reduce + 'a>>>,
-	pub transformers: Vec<Box<dyn Transform + 'a>>,
+	pub groups: BTreeMap<u64, Vec<Box<dyn Transform>>>,
+	pub hashers: Vec<Box<dyn Transform>>,
+	pub get_transformers: F,
 	pub headers: Headers,
 }
-impl<'a, I> TransformInto<'a, I> {
-	pub fn ensure_group(&'a mut self, hash: u64) {
-		if let Entry::Vacant(entry) = self.groups.entry(hash) {
-			let reducers = self
-				.transformers
-				.iter_mut()
-				.map(|transformer| transformer.new_reducer())
-				.collect();
-			entry.insert(reducers);
-		};
-	}
-}
-impl<'a, I> Iterator for TransformInto<'a, I>
+impl<I, F> Iterator for TransformInto<I, F>
 where
 	I: Iterator<Item = RowResult>,
+	F: FnMut() -> Vec<Box<dyn Transform>>,
 {
 	type Item = RowResult;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		// If any error rows are found, they are returned first
 		if let Some(row_result) = self.iterator.next() {
-			// First run iterator into hashmap
+			// First run iterator into BTreeMap
 			let row = match row_result {
 				Ok(row) => row,
 				Err(e) => return Some(Err(e)),
 			};
-			let hash = match compute_hash(&self.transformers, &self.headers, &row) {
+			let hash = match compute_hash(&self.hashers, &self.headers, &row) {
 				Ok(hash) => hash,
 				Err(e) => return Some(Err(e)),
 			};
-			self.ensure_group(hash);
+
+			match self.groups.entry(hash) {
+				Entry::Occupied(_) => {}
+				Entry::Vacant(entry) => {
+					let transformers = (self.get_transformers)();
+					entry.insert(transformers);
+				}
+			}
+
 			let group_row = self.groups.get_mut(&hash).unwrap();
 			for reducer in group_row {
 				let result = reducer.add_row(&self.headers, &row);
@@ -138,7 +139,7 @@ where
 			}
 			return self.next();
 		}
-		// Finally, return rows from the hashmap
+		// Finally, return rows from the BTreeMap
 		if let Some(key) = self.groups.keys().next().copied() {
 			let reducers = self.groups.remove(&key).unwrap();
 			let fields: Vec<_> = reducers.iter().map(|reducer| reducer.value()).collect();

@@ -1,16 +1,16 @@
 use crate::{Error, Row};
 use csv::StringRecordIter;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Headers {
-	indexes: HashMap<String, usize>,
+	indexes: BTreeMap<String, usize>,
 	row: Row,
 }
 impl Headers {
 	pub fn new() -> Self {
 		Headers {
-			indexes: HashMap::new(),
+			indexes: BTreeMap::new(),
 			row: Row::new(),
 		}
 	}

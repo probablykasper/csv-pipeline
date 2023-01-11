@@ -5,7 +5,7 @@ use crate::transform::Transform;
 use crate::{Error, Row, RowResult, StringTarget};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use std::borrow::BorrowMut;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
@@ -207,14 +207,15 @@ impl<'a> Pipeline<'a> {
 	///
 	/// assert_eq!(csv, "X,B\n1,2\n");
 	/// ```
-	pub fn transform_into<T>(mut self, transformers: T) -> Self
+	pub fn transform_into<T>(mut self, mut get_transformers: T) -> Self
 	where
-		T: IntoIterator<Item = Box<dyn Transform>>,
+		T: FnMut() -> Vec<Box<dyn Transform>> + 'a,
 	{
 		self.iterator = Box::new(TransformInto {
 			iterator: self.iterator,
-			groups: HashMap::new(),
-			transformers: transformers.into_iter().collect(),
+			groups: BTreeMap::new(),
+			hashers: get_transformers(),
+			get_transformers,
 			headers: self.headers.clone(),
 		});
 		self

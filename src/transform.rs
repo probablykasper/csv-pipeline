@@ -14,13 +14,9 @@ pub trait Transform {
 		Ok(())
 	}
 
-	fn new_reducer<'a>(&'a mut self) -> Box<dyn Reduce + 'a>;
-
 	/// Get the resulting column name
 	fn name(&self) -> String;
-}
 
-pub trait Reduce {
 	/// Combine the row with the value
 	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error>;
 
@@ -32,7 +28,7 @@ pub struct Transformer {
 	name: String,
 	from_col: String,
 }
-impl<'a> Transformer {
+impl Transformer {
 	pub fn new(col_name: &str) -> Self {
 		Self {
 			name: col_name.to_string(),
@@ -46,14 +42,12 @@ impl<'a> Transformer {
 			value: "".to_string(),
 		})
 	}
-}
-impl Transformer {
 	pub fn reduce<'a, R, V>(self, reduce: R, init: V) -> Box<dyn Transform + 'a>
 	where
 		R: FnMut(V, &str) -> Result<V, Error> + 'a,
 		V: Display + Clone + 'a,
 	{
-		Box::new(ClosureTransformer {
+		Box::new(Closure {
 			name: self.name,
 			from_col: self.from_col,
 			reduce,
@@ -62,36 +56,13 @@ impl Transformer {
 	}
 }
 
-struct ClosureTransformer<F, V> {
+struct Closure<F, V> {
 	name: String,
 	from_col: String,
 	reduce: F,
 	value: V,
 }
-impl<F, V> Transform for ClosureTransformer<F, V>
-where
-	F: FnMut(V, &str) -> Result<V, Error>,
-	V: Display + Clone,
-{
-	fn new_reducer<'a>(&'a mut self) -> Box<dyn Reduce + 'a> {
-		Box::new(Closure {
-			from_col: self.from_col.clone(),
-			reduce: &mut self.reduce,
-			value: self.value.clone(),
-		})
-	}
-
-	fn name(&self) -> String {
-		self.name.clone()
-	}
-}
-
-struct Closure<'a, F, V> {
-	from_col: String,
-	reduce: &'a mut F,
-	value: V,
-}
-impl<F, V> Reduce for Closure<'_, F, V>
+impl<F, V> Transform for Closure<F, V>
 where
 	F: FnMut(V, &str) -> Result<V, Error>,
 	V: Display + Clone,
@@ -101,12 +72,16 @@ where
 			.get_field(row, &self.from_col)
 			.ok_or(Error::MissingColumn(self.from_col.clone()))?
 			.to_string();
-		(self.reduce)(self.value.clone(), &field)?;
-		todo!()
+		self.value = (self.reduce)(self.value.clone(), &field)?;
+		Ok(())
 	}
 
 	fn value(&self) -> String {
 		self.value.to_string()
+	}
+
+	fn name(&self) -> String {
+		self.name.clone()
 	}
 }
 
@@ -123,19 +98,11 @@ impl Transform for KeepUnique {
 		field.hash(hasher);
 		Ok(())
 	}
-	fn new_reducer<'a>(&'a mut self) -> Box<dyn Reduce + 'a> {
-		Box::new(Self {
-			name: self.name.clone(),
-			from_col: self.name.clone(),
-			value: "".to_string(),
-		})
-	}
 
 	fn name(&self) -> String {
 		self.name.clone()
 	}
-}
-impl Reduce for KeepUnique {
+
 	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
 		self.value = headers
 			.get_field(row, &self.from_col)
