@@ -143,8 +143,6 @@ where
 			let reducers = self.groups.remove(&key).unwrap();
 			let fields: Vec<_> = reducers.iter().map(|reducer| reducer.value()).collect();
 			let row = Row::from(fields);
-			println!("x {row:?}");
-			println!("- {}", reducers.len());
 			Some(Ok(row))
 		} else {
 			None
@@ -170,6 +168,35 @@ where
 			Err(e) => return Some(Err(e)),
 		};
 		match (self.f)(&self.headers, &row) {
+			Ok(()) => Some(Ok(row)),
+			Err(e) => Some(Err(e)),
+		}
+	}
+}
+
+pub struct ValidateCol<I, F> {
+	pub name: String,
+	pub iterator: I,
+	pub f: F,
+	pub headers: Headers,
+}
+impl<I, F> Iterator for ValidateCol<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&str) -> Result<(), Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next()? {
+			Ok(row) => row,
+			Err(e) => return Some(Err(e)),
+		};
+		let field = match self.headers.get_field(&row, &self.name) {
+			Some(field) => field,
+			None => return Some(Err(Error::MissingColumn(self.name.clone()))),
+		};
+		match (self.f)(&field) {
 			Ok(()) => Some(Ok(row)),
 			Err(e) => Some(Err(e)),
 		}

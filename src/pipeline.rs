@@ -1,5 +1,7 @@
 use super::headers::Headers;
-use crate::pipeline_iterators::{AddCol, Flush, MapCol, MapRow, TransformInto, Validate};
+use crate::pipeline_iterators::{
+	AddCol, Flush, MapCol, MapRow, TransformInto, Validate, ValidateCol,
+};
 use crate::target::Target;
 use crate::transform::Transform;
 use crate::{Error, Row, RowResult, StringTarget};
@@ -230,6 +232,19 @@ impl<'a> Pipeline<'a> {
 		F: FnMut(&Headers, &Row) -> Result<(), Error> + 'a,
 	{
 		self.iterator = Box::new(Validate {
+			iterator: self.iterator,
+			f: get_row,
+			headers: self.headers.clone(),
+		});
+		self
+	}
+
+	pub fn validate_col<F>(mut self, name: &str, get_row: F) -> Self
+	where
+		F: FnMut(&str) -> Result<(), Error> + 'a,
+	{
+		self.iterator = Box::new(ValidateCol {
+			name: name.to_string(),
 			iterator: self.iterator,
 			f: get_row,
 			headers: self.headers.clone(),
