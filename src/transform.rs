@@ -3,6 +3,7 @@ use core::fmt::Display;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+/// For grouping and reducing rows.
 pub trait Transform {
 	/// Add the row to the hasher to group this row separately from others
 	fn hash(
@@ -24,6 +25,7 @@ pub trait Transform {
 	fn value(&self) -> String;
 }
 
+/// A struct for building a [`Transform`], which you can use with [`Pipeline::transform_into`](crate::Pipeline::transform_into).
 pub struct Transformer {
 	name: String,
 	from_col: String,
@@ -35,10 +37,12 @@ impl Transformer {
 			from_col: col_name.to_string(),
 		}
 	}
+	/// Specify which column the transform should be based on
 	pub fn from_col(mut self, col_name: &str) -> Self {
 		self.from_col = col_name.to_string();
 		self
 	}
+	/// Keep the unique values from this column
 	pub fn keep_unique(self) -> Box<dyn Transform> {
 		Box::new(KeepUnique {
 			name: self.name,
@@ -46,6 +50,7 @@ impl Transformer {
 			value: "".to_string(),
 		})
 	}
+	/// Reduce the values from this column into a single value using a closure
 	pub fn reduce<'a, R, V>(self, reduce: R, init: V) -> Box<dyn Transform + 'a>
 	where
 		R: FnMut(V, &str) -> Result<V, Error> + 'a,
@@ -120,7 +125,7 @@ impl Transform for KeepUnique {
 	}
 }
 
-pub fn compute_hash<'a>(
+pub(crate) fn compute_hash<'a>(
 	transformers: &Vec<Box<dyn Transform + 'a>>,
 	headers: &Headers,
 	row: &Row,

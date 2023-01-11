@@ -2,6 +2,7 @@ use crate::{Error, Row};
 use csv::StringRecordIter;
 use std::collections::BTreeMap;
 
+/// The headers of a CSV file
 #[derive(Debug, Clone, PartialEq)]
 pub struct Headers {
 	indexes: BTreeMap<String, usize>,

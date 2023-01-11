@@ -1,6 +1,6 @@
 //! CSV processing library inspired by [csvsc](https://crates.io/crates/csvsc)
 //!
-//! ## Quickstart
+//! ## Get started
 //!
 //! The first thing you need is to create a [`Pipeline`]. This can be done by calling [`Pipeline::from_reader`] with a [`csv::Reader`], or [`Pipeline::from_path`] with a path.
 //!
@@ -11,7 +11,7 @@
 //! Finally, you probably want to run the pipeline. There are a few options:
 //! - [`Pipeline::build`] gives you a [`PipelineIter`] which you can iterate through
 //! - [`Pipeline::run`] runs through the pipeline until it finds an error, or the end
-//! - [`Pipeline::collect_into_string`] runs the pipeline and returns the csv as a `Result<String, Error>`. Can be a convenient alternative to flushing to a [`StringTarget`].
+//! - [`Pipeline::collect_into_string`] runs the pipeline and returns the csv as a `Result<String, Error>`. Can be a convenient alternative to flushing to a [`StringTarget`](target::StringTarget).
 //!
 //! ## Basic Example
 //!
@@ -84,18 +84,38 @@
 //! ```
 //!
 
+use std::path::PathBuf;
+
 mod headers;
 mod pipeline;
 mod pipeline_iterators;
-mod target;
 mod transform;
 
 pub use headers::Headers;
 pub use pipeline::{Pipeline, PipelineIter};
-pub use target::{PathTarget, StderrTarget, StdoutTarget, StringTarget, Target};
 pub use transform::Transformer;
 
+pub mod target;
+/// Helper for building a target to flush data into
+pub struct Target {}
+impl Target {
+	pub fn path<P: Into<PathBuf>>(path: P) -> target::PathTarget {
+		target::PathTarget::new(path)
+	}
+	pub fn stdout() -> target::StdoutTarget {
+		target::StdoutTarget::new()
+	}
+	pub fn stderr() -> target::StderrTarget {
+		target::StderrTarget::new()
+	}
+	pub fn string<'a>(s: &'a mut String) -> target::StringTarget {
+		target::StringTarget::new(s)
+	}
+}
+
+/// Alias of [`csv::StringRecord`]
 pub type Row = csv::StringRecord;
+/// Alias of `Result<Row, Error>`
 pub type RowResult = Result<Row, Error>;
 
 #[derive(Debug)]

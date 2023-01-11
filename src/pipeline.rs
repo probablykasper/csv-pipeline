@@ -2,15 +2,16 @@ use super::headers::Headers;
 use crate::pipeline_iterators::{
 	AddCol, Flush, MapCol, MapRow, TransformInto, Validate, ValidateCol,
 };
-use crate::target::Target;
+use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
-use crate::{Error, Row, RowResult, StringTarget};
+use crate::{Error, Row, RowResult};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
+/// The main thing
 pub struct Pipeline<'a> {
 	pub headers: Headers,
 	iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
@@ -303,6 +304,7 @@ impl<'a> IntoIterator for Pipeline<'a> {
 	}
 }
 
+/// A pipeline you can iterate through. You can get one using [`Pipeline::build`].
 pub struct PipelineIter<'a> {
 	pub headers: Headers,
 	pub iterator: Box<dyn Iterator<Item = RowResult> + 'a>,
