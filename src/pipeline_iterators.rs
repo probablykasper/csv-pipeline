@@ -152,6 +152,30 @@ where
 	}
 }
 
+pub struct Validate<I, F> {
+	pub iterator: I,
+	pub f: F,
+	pub headers: Headers,
+}
+impl<I, F> Iterator for Validate<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&Headers, &Row) -> Result<(), Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next()? {
+			Ok(row) => row,
+			Err(e) => return Some(Err(e)),
+		};
+		match (self.f)(&self.headers, &row) {
+			Ok(()) => Some(Ok(row)),
+			Err(e) => Some(Err(e)),
+		}
+	}
+}
+
 pub struct Flush<I, T> {
 	pub iterator: I,
 	pub target: T,
