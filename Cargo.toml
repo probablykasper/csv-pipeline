@@ -1,6 +1,6 @@
 [package]
 name = "csv-pipeline"
-version = "0.0.0"
+version = "0.1.0"
 description = "CSV processing library"
 authors = ["Kasper Henningsen"]
 edition = "2021"
