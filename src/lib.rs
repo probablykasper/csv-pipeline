@@ -49,7 +49,7 @@ fn transform() {
 		.transform_into(|| {
 			vec![
 				Transformer::new("Person").keep_unique(),
-				Transformer::new("Score").reduce(
+				Transformer::new("Total score").from_col("Score").reduce(
 					|accumulator, current| {
 						let score: u64 = current.parse().unwrap();
 						Ok(accumulator + score)

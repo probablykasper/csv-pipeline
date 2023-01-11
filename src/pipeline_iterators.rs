@@ -111,7 +111,7 @@ where
 
 	fn next(&mut self) -> Option<Self::Item> {
 		// If any error rows are found, they are returned first
-		if let Some(row_result) = self.iterator.next() {
+		while let Some(row_result) = self.iterator.next() {
 			// First run iterator into BTreeMap
 			let row = match row_result {
 				Ok(row) => row,
@@ -137,7 +137,6 @@ where
 					return Some(Err(e));
 				}
 			}
-			return self.next();
 		}
 		// Finally, return rows from the BTreeMap
 		if let Some(key) = self.groups.keys().next().copied() {
