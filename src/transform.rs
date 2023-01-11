@@ -35,6 +35,10 @@ impl Transformer {
 			from_col: col_name.to_string(),
 		}
 	}
+	pub fn from_col(mut self, col_name: &str) -> Self {
+		self.from_col = col_name.to_string();
+		self
+	}
 	pub fn keep_unique(self) -> Box<dyn Transform> {
 		Box::new(KeepUnique {
 			name: self.name,
