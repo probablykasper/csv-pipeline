@@ -54,7 +54,7 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	pub fn add_col<F>(mut self, name: &str, get_value: F) -> Self
 	where
-		F: FnMut(&Headers, &Row) -> Result<&'a str, Error> + 'a,
+		F: FnMut(&Headers, &Row) -> Result<String, Error> + 'a,
 	{
 		self.headers.push_field(name);
 		self.iterator = Box::new(AddCol {

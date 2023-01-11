@@ -75,8 +75,8 @@ fn test_pipeline() {
 		.unwrap()
 		.add_col("Language", |headers, row| {
 			match headers.get_field(row, "Country") {
-				Some("Norway") => Ok("Norwegian"),
-				_ => Ok("Unknown"),
+				Some("Norway") => Ok("Norwegian".into()),
+				_ => Ok("Unknown".into()),
 			}
 		})
 		.rename_col("Country", "COUNTRY")

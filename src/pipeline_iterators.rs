@@ -5,15 +5,15 @@ use crate::{Error, Row, RowResult};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
-pub struct AddCol<'a, I, F: FnMut(&Headers, &Row) -> Result<&'a str, Error>> {
+pub struct AddCol<I, F: FnMut(&Headers, &Row) -> Result<String, Error>> {
 	pub iterator: I,
 	pub f: F,
 	pub headers: Headers,
 }
-impl<'a, I, F> Iterator for AddCol<'a, I, F>
+impl<I, F> Iterator for AddCol<I, F>
 where
 	I: Iterator<Item = RowResult>,
-	F: FnMut(&Headers, &Row) -> Result<&'a str, Error>,
+	F: FnMut(&Headers, &Row) -> Result<String, Error>,
 {
 	type Item = RowResult;
 
