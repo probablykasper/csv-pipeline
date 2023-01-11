@@ -187,7 +187,7 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
-	/// Group and reduce rows
+	/// Group and reduce rows into. Panics if the transform results in duplicate column names.
 	///
 	/// ## Example
 	///
@@ -207,18 +207,22 @@ impl<'a> Pipeline<'a> {
 	///
 	/// assert_eq!(csv, "X,B\n1,2\n");
 	/// ```
-	pub fn transform_into<T>(mut self, mut get_transformers: T) -> Self
+	pub fn transform_into<T>(self, mut get_transformers: T) -> Self
 	where
 		T: FnMut() -> Vec<Box<dyn Transform>> + 'a,
 	{
-		self.iterator = Box::new(TransformInto {
-			iterator: self.iterator,
-			groups: BTreeMap::new(),
-			hashers: get_transformers(),
-			get_transformers,
-			headers: self.headers.clone(),
-		});
-		self
+		let hashers = get_transformers();
+		let names: Vec<_> = hashers.iter().map(|hasher| hasher.name()).collect();
+		Pipeline {
+			headers: Headers::from_row(Row::from(names)).unwrap(),
+			iterator: Box::new(TransformInto {
+				iterator: self.iterator,
+				groups: BTreeMap::new(),
+				hashers: get_transformers(),
+				get_transformers,
+				headers: self.headers.clone(),
+			}),
+		}
 	}
 
 	/// Write to the specified [`Target`].
