@@ -2,8 +2,7 @@ use super::headers::Headers;
 use crate::target::Target;
 use crate::transform::{compute_hash, Transform};
 use crate::{Error, Pipeline, PipelineIter, Row, RowResult};
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use linked_hash_map::{Entry, LinkedHashMap};
 
 pub struct PipelinesChain<'a, P> {
 	pub pipelines: P,
@@ -167,7 +166,7 @@ where
 	F: FnMut() -> Vec<Box<dyn Transform>>,
 {
 	pub iterator: I,
-	pub groups: BTreeMap<u64, Vec<Box<dyn Transform>>>,
+	pub groups: LinkedHashMap<u64, Vec<Box<dyn Transform>>>,
 	pub hashers: Vec<Box<dyn Transform>>,
 	pub get_transformers: F,
 	pub headers: Headers,
@@ -182,7 +181,7 @@ where
 	fn next(&mut self) -> Option<Self::Item> {
 		// If any error rows are found, they are returned first
 		while let Some(row_result) = self.iterator.next() {
-			// First run iterator into BTreeMap
+			// First run iterator into LinkedHashMap
 			let row = match row_result {
 				Ok(row) => row,
 				Err(e) => return Some(Err(e)),
@@ -208,7 +207,7 @@ where
 				}
 			}
 		}
-		// Finally, return rows from the BTreeMap
+		// Finally, return rows from the LinkedHashMap
 		if let Some(key) = self.groups.keys().next().copied() {
 			let reducers = self.groups.remove(&key).unwrap();
 			let fields: Vec<_> = reducers.iter().map(|reducer| reducer.value()).collect();

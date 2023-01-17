@@ -6,8 +6,8 @@ use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
 use crate::{Error, Row, RowResult};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
+use linked_hash_map::LinkedHashMap;
 use std::borrow::BorrowMut;
-use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
@@ -284,7 +284,7 @@ impl<'a> Pipeline<'a> {
 			headers: Headers::from_row(Row::from(names)).unwrap(),
 			iterator: Box::new(TransformInto {
 				iterator: self.iterator,
-				groups: BTreeMap::new(),
+				groups: LinkedHashMap::new(),
 				hashers: get_transformers(),
 				get_transformers,
 				headers: self.headers.clone(),
