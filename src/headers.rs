@@ -1,6 +1,7 @@
-use crate::{Error, Row};
+use crate::Row;
 use csv::StringRecordIter;
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// The headers of a CSV file
 #[derive(Debug, Clone, PartialEq)]
@@ -8,6 +9,19 @@ pub struct Headers {
 	indexes: BTreeMap<String, usize>,
 	row: Row,
 }
+pub enum RenameError {
+	DuplicateColumn(usize),
+	MissingColumn,
+}
+impl fmt::Display for RenameError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			RenameError::DuplicateColumn(index) => write!(f, "Duplicate column at index {}", index),
+			RenameError::MissingColumn => write!(f, "Missing column"),
+		}
+	}
+}
+
 impl Headers {
 	pub fn new() -> Self {
 		Headers {
@@ -17,13 +31,13 @@ impl Headers {
 	}
 
 	/// Returns `Error::MissingColumn` if `from` is non-existant or `Error::DuplicateColumn` the new name already exists
-	pub fn rename(&mut self, from: &str, to: &str) -> Result<(), Error> {
-		if self.contains(to) {
-			return Err(Error::DuplicateColumn(to.to_string()));
+	pub fn rename(&mut self, from: &str, to: &str) -> Result<(), RenameError> {
+		if let Some(index) = self.get_index(to) {
+			return Err(RenameError::DuplicateColumn(index));
 		}
 		let index = match self.indexes.remove(from) {
 			Some(index) => index,
-			None => return Err(Error::MissingColumn(from.to_string())),
+			None => return Err(RenameError::MissingColumn),
 		};
 		self.indexes.insert(to.to_string(), index);
 		let mut row_vec: Vec<_> = self.row.into_iter().collect();
@@ -60,13 +74,13 @@ impl Headers {
 		&self.row
 	}
 
-	/// Returns `Error::DuplicateColumn` if a column is duplicated
-	pub fn from_row(row: Row) -> Result<Self, Error> {
+	/// If a column is duplicated, errors with the column name
+	pub fn from_row(row: Row) -> Result<Self, String> {
 		let mut header = Headers::new();
 		for field in &row {
 			let added = header.push_field(field);
 			if !added {
-				return Err(Error::DuplicateColumn(field.to_string()));
+				return Err(field.to_string());
 			}
 		}
 		Ok(header)

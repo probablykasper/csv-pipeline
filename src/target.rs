@@ -1,4 +1,4 @@
-use crate::{Error, Headers, Row};
+use crate::{Headers, Row};
 use csv::WriterBuilder;
 use std::fs::{self, File};
 use std::io;
@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 pub trait Target {
 	/// Useful for initializations
-	fn write_headers(&mut self, headers: &Headers) -> Result<(), Error>;
-	fn write_row(&mut self, row: &Row) -> Result<(), Error>;
+	fn write_headers(&mut self, headers: &Headers) -> Result<(), csv::Error>;
+	fn write_row(&mut self, row: &Row) -> Result<(), csv::Error>;
 }
 
 pub struct PathTarget {
@@ -23,7 +23,7 @@ impl PathTarget {
 	}
 }
 impl Target for PathTarget {
-	fn write_headers(&mut self, headers: &Headers) -> Result<(), Error> {
+	fn write_headers(&mut self, headers: &Headers) -> Result<(), csv::Error> {
 		if let Some(parent) = self.path.parent() {
 			fs::create_dir_all(parent)?;
 		}
@@ -31,7 +31,7 @@ impl Target for PathTarget {
 		self.writer = Some(csv::Writer::from_path(&self.path)?);
 		self.write_row(headers.get_row())
 	}
-	fn write_row(&mut self, row: &Row) -> Result<(), Error> {
+	fn write_row(&mut self, row: &Row) -> Result<(), csv::Error> {
 		self.writer.as_mut().unwrap().write_record(row)?;
 		Ok(())
 	}
@@ -46,13 +46,13 @@ impl StdoutTarget {
 	}
 }
 impl Target for StdoutTarget {
-	fn write_headers(&mut self, headers: &Headers) -> Result<(), Error> {
+	fn write_headers(&mut self, headers: &Headers) -> Result<(), csv::Error> {
 		let writer = WriterBuilder::new().from_writer(io::stdout());
 		self.writer = Some(writer);
 		self.write_row(headers.get_row())?;
 		Ok(())
 	}
-	fn write_row(&mut self, row: &Row) -> Result<(), Error> {
+	fn write_row(&mut self, row: &Row) -> Result<(), csv::Error> {
 		self.writer.as_mut().unwrap().write_record(row)?;
 		Ok(())
 	}
@@ -67,12 +67,12 @@ impl StderrTarget {
 	}
 }
 impl Target for StderrTarget {
-	fn write_headers(&mut self, headers: &Headers) -> Result<(), Error> {
+	fn write_headers(&mut self, headers: &Headers) -> Result<(), csv::Error> {
 		let writer = WriterBuilder::new().from_writer(io::stderr());
 		self.writer = Some(writer);
 		self.write_row(headers.get_row())
 	}
-	fn write_row(&mut self, row: &Row) -> Result<(), Error> {
+	fn write_row(&mut self, row: &Row) -> Result<(), csv::Error> {
 		self.writer.as_mut().unwrap().write_record(row)?;
 		Ok(())
 	}
@@ -106,10 +106,10 @@ impl<'a> StringTarget<'a> {
 	}
 }
 impl<'a> Target for StringTarget<'a> {
-	fn write_headers(&mut self, headers: &Headers) -> Result<(), Error> {
+	fn write_headers(&mut self, headers: &Headers) -> Result<(), csv::Error> {
 		self.write_row(headers.get_row())
 	}
-	fn write_row(&mut self, row: &Row) -> Result<(), Error> {
+	fn write_row(&mut self, row: &Row) -> Result<(), csv::Error> {
 		self.writer.write_record(row)?;
 		Ok(())
 	}

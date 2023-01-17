@@ -113,10 +113,20 @@ pub type Row = csv::StringRecord;
 pub type RowResult = Result<Row, Error>;
 
 #[derive(Debug)]
-pub enum Error {
-	/// cSV and IO errors are in here
+pub struct Error {
+	pub source: usize,
+	pub kind: ErrorKind,
+}
+impl Error {
+	pub fn new(source: usize, kind: ErrorKind) -> Error {
+		Error { source, kind }
+	}
+}
+
+#[derive(Debug)]
+pub enum ErrorKind {
+	/// CSV and IO errors are in here.
 	Csv(csv::Error),
-	Io(std::io::Error),
 	/// The column of this name is missing.
 	MissingColumn(String),
 	/// This column name appears twice.
@@ -125,15 +135,4 @@ pub enum Error {
 	InvalidField(String),
 	/// Two pipeline sources don't have the same headers.
 	MismatchedHeaders(Row, Row),
-}
-impl From<csv::Error> for Error {
-	fn from(error: csv::Error) -> Error {
-		Error::Csv(error)
-	}
-}
-
-impl From<std::io::Error> for Error {
-	fn from(error: std::io::Error) -> Error {
-		Error::Io(error)
-	}
 }
