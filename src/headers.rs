@@ -16,7 +16,7 @@ impl Headers {
 		}
 	}
 
-	/// Returns `false` if `from` is non-existant or if the new name already exists
+	/// Returns `Error::MissingColumn` if `from` is non-existant or `Error::DuplicateColumn` the new name already exists
 	pub fn rename(&mut self, from: &str, to: &str) -> Result<(), Error> {
 		if self.contains(to) {
 			return Err(Error::DuplicateColumn(to.to_string()));
@@ -60,6 +60,7 @@ impl Headers {
 		&self.row
 	}
 
+	/// Returns `Error::DuplicateColumn` if a column is duplicated
 	pub fn from_row(row: Row) -> Result<Self, Error> {
 		let mut header = Headers::new();
 		for field in &row {

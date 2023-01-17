@@ -1,9 +1,51 @@
 use super::headers::Headers;
 use crate::target::Target;
 use crate::transform::{compute_hash, Transform};
-use crate::{Error, Row, RowResult};
+use crate::{Error, Pipeline, PipelineIter, Row, RowResult};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+
+pub struct PipelinesChain<'a, P> {
+	pub pipelines: P,
+	pub current: Option<PipelineIter<'a>>,
+	pub index: usize,
+	pub headers: Headers,
+}
+impl<'a, P> Iterator for PipelinesChain<'a, P>
+where
+	P: Iterator<Item = Pipeline<'a>>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		match &mut self.current {
+			Some(current) => match current.next() {
+				Some(row) => return Some(row),
+				None => {}
+			},
+			None => {}
+		};
+		match self.pipelines.next() {
+			Some(pipeline) => {
+				if pipeline.headers.get_row() != self.headers.get_row() {
+					return Some(Err(Error::MismatchedHeaders(
+						self.headers.get_row().to_owned(),
+						pipeline.headers.get_row().to_owned(),
+					)));
+				}
+				self.current = Some(pipeline.build());
+				self.index += 1;
+			}
+			None => {
+				self.current = None;
+			}
+		}
+		match self.current {
+			Some(ref mut current) => current.next(),
+			None => None,
+		}
+	}
+}
 
 pub struct AddCol<I, F: FnMut(&Headers, &Row) -> Result<String, Error>> {
 	pub iterator: I,

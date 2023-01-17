@@ -1,5 +1,9 @@
 # Changelog
 
+## Next
+- Add Pipeline select method
+- Add Pipeline `from_pipelines` constructor for merging pipelines together
+
 ## 0.2.0 - 2023 Jan 11
 - Add `Target` struct helper for creating targets, and hide the targets in the `target` module.
 - Publish `Transform` trait

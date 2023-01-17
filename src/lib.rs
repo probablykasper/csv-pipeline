@@ -114,11 +114,17 @@ pub type RowResult = Result<Row, Error>;
 
 #[derive(Debug)]
 pub enum Error {
+	/// cSV and IO errors are in here
 	Csv(csv::Error),
 	Io(std::io::Error),
+	/// The column of this name is missing.
 	MissingColumn(String),
+	/// This column name appears twice.
 	DuplicateColumn(String),
+	/// This field has an invalid format.
 	InvalidField(String),
+	/// Two pipeline sources don't have the same headers.
+	MismatchedHeaders(Row, Row),
 }
 impl From<csv::Error> for Error {
 	fn from(error: csv::Error) -> Error {

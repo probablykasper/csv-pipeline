@@ -1,6 +1,6 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{
-	AddCol, Flush, MapCol, MapRow, Select, TransformInto, Validate, ValidateCol,
+	AddCol, Flush, MapCol, MapRow, PipelinesChain, Select, TransformInto, Validate, ValidateCol,
 };
 use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
@@ -40,6 +40,40 @@ impl<'a> Pipeline<'a> {
 			.from_path(file_path)
 			.unwrap();
 		Self::from_reader(reader)
+	}
+
+	/// Merge multiple source pipelines into one. The source pipelines must have identical headers, otherwise the pipelie will return a [`MismatchedHeaders`](Error::MismatchedHeaders) error  returned.
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::Pipeline;
+	///
+	/// let csv = Pipeline::from_pipelines(vec![
+	///   Pipeline::from_path("test/AB.csv").unwrap(),
+	///   Pipeline::from_path("test/AB.csv").unwrap(),
+	/// ])
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "A,B\n1,2\n1,2\n");
+	/// ```
+	pub fn from_pipelines(pipelines: Vec<Pipeline<'a>>) -> Self {
+		let mut pipelines = pipelines.into_iter();
+		let current = pipelines.next();
+		let headers = match current {
+			Some(ref pipeline) => pipeline.headers.clone(),
+			None => Headers::new(),
+		};
+		Pipeline {
+			headers: headers.clone(),
+			iterator: Box::new(PipelinesChain {
+				pipelines,
+				current: current.map(|p| p.build()),
+				index: 0,
+				headers,
+			}),
+		}
 	}
 
 	/// Adds a column with values computed from the closure for each row.
@@ -258,26 +292,26 @@ impl<'a> Pipeline<'a> {
 		}
 	}
 
-	pub fn validate<F>(mut self, get_row: F) -> Self
+	pub fn validate<F>(mut self, f: F) -> Self
 	where
 		F: FnMut(&Headers, &Row) -> Result<(), Error> + 'a,
 	{
 		self.iterator = Box::new(Validate {
 			iterator: self.iterator,
-			f: get_row,
+			f,
 			headers: self.headers.clone(),
 		});
 		self
 	}
 
-	pub fn validate_col<F>(mut self, name: &str, get_row: F) -> Self
+	pub fn validate_col<F>(mut self, name: &str, f: F) -> Self
 	where
 		F: FnMut(&str) -> Result<(), Error> + 'a,
 	{
 		self.iterator = Box::new(ValidateCol {
 			name: name.to_string(),
 			iterator: self.iterator,
-			f: get_row,
+			f,
 			headers: self.headers.clone(),
 		});
 		self
@@ -386,5 +420,24 @@ impl<R: io::Read> Iterator for RowIter<R> {
 				return Error::from(err);
 			})
 		})
+	}
+}
+
+#[test]
+fn from_pipelines_mismatch() {
+	let err = Pipeline::from_pipelines(vec![
+		Pipeline::from_path("test/AB.csv").unwrap(),
+		Pipeline::from_path("test/AB.csv").unwrap(),
+		Pipeline::from_path("test/Countries.csv").unwrap(),
+	])
+	.collect_into_string()
+	.unwrap_err();
+
+	match err {
+		Error::MismatchedHeaders(h1, h2) => {
+			assert_eq!(h1, Row::from(vec!["A", "B"]));
+			assert_eq!(h2, Row::from(vec!["ID", "Country"]));
+		}
+		_ => panic!("Expected MismatchedHeaders"),
 	}
 }
