@@ -1,6 +1,6 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{
-	AddCol, Flush, MapCol, MapRow, TransformInto, Validate, ValidateCol,
+	AddCol, Flush, MapCol, MapRow, Select, TransformInto, Validate, ValidateCol,
 };
 use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
@@ -132,6 +132,32 @@ impl<'a> Pipeline<'a> {
 			name: col.to_string(),
 			index: self.headers.get_index(col),
 		});
+		self
+	}
+
+	/// Pick which columns to output, in the specified order. Panics if duplicate colums are specified.
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::Pipeline;
+	///
+	/// let csv = Pipeline::from_path("test/AB.csv")
+	///   .unwrap()
+	///   .select(vec!["B"])
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(csv, "B\n2\n");
+	/// ```
+	pub fn select(mut self, columns: Vec<&str>) -> Self {
+		let new_header_row = Row::from(columns.clone());
+		self.iterator = Box::new(Select {
+			iterator: self.iterator,
+			columns: columns.into_iter().map(String::from).collect(),
+			headers: self.headers.clone(),
+		});
+		self.headers = Headers::from_row(new_header_row).unwrap();
 		self
 	}
 

@@ -92,6 +92,34 @@ where
 	}
 }
 
+pub struct Select<I> {
+	pub iterator: I,
+	pub columns: Vec<String>,
+	pub headers: Headers,
+}
+impl<I> Iterator for Select<I>
+where
+	I: Iterator<Item = RowResult>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let row = match self.iterator.next()? {
+			Ok(row) => row,
+			Err(e) => return Some(Err(e)),
+		};
+		let mut selection = Vec::with_capacity(self.columns.len());
+		for col in &self.columns {
+			let field = match self.headers.get_field(&row, col) {
+				Some(field) => field,
+				None => return Some(Err(Error::MissingColumn(col.clone()))),
+			};
+			selection.push(field);
+		}
+		Some(Ok(selection.into()))
+	}
+}
+
 pub struct TransformInto<I, F>
 where
 	F: FnMut() -> Vec<Box<dyn Transform>>,
