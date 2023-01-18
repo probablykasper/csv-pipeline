@@ -1,4 +1,4 @@
-use crate::{ErrorKind, Headers, Row};
+use crate::{Error, Headers, Row};
 use core::fmt::Display;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -13,7 +13,7 @@ pub trait Transform {
 		_hasher: &mut DefaultHasher,
 		_headers: &Headers,
 		_row: &Row,
-	) -> Result<(), ErrorKind> {
+	) -> Result<(), Error> {
 		Ok(())
 	}
 
@@ -21,7 +21,7 @@ pub trait Transform {
 	fn name(&self) -> String;
 
 	/// Combine the row with the value
-	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), ErrorKind>;
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error>;
 
 	/// Turn the current value to a string
 	fn value(&self) -> String;
@@ -66,7 +66,7 @@ impl Transformer {
 	/// Reduce the values from this column into a single value using a closure
 	pub fn reduce<'a, R, V>(self, reduce: R, init: V) -> Box<dyn Transform + 'a>
 	where
-		R: FnMut(V, &str) -> Result<V, ErrorKind> + 'a,
+		R: FnMut(V, &str) -> Result<V, Error> + 'a,
 		V: Display + Clone + 'a,
 	{
 		Box::new(Reduce {
@@ -84,15 +84,10 @@ struct KeepUnique {
 	value: String,
 }
 impl Transform for KeepUnique {
-	fn hash(
-		&self,
-		hasher: &mut DefaultHasher,
-		headers: &Headers,
-		row: &Row,
-	) -> Result<(), ErrorKind> {
+	fn hash(&self, hasher: &mut DefaultHasher, headers: &Headers, row: &Row) -> Result<(), Error> {
 		let field = headers
 			.get_field(row, &self.from_col)
-			.ok_or(ErrorKind::MissingColumn(self.from_col.clone()))?;
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?;
 		field.hash(hasher);
 		Ok(())
 	}
@@ -101,10 +96,10 @@ impl Transform for KeepUnique {
 		self.name.clone()
 	}
 
-	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), ErrorKind> {
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
 		self.value = headers
 			.get_field(row, &self.from_col)
-			.ok_or(ErrorKind::MissingColumn(self.from_col.clone()))?
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?
 			.to_string();
 		Ok(())
 	}
@@ -118,7 +113,7 @@ pub(crate) fn compute_hash<'a>(
 	transformers: &Vec<Box<dyn Transform + 'a>>,
 	headers: &Headers,
 	row: &Row,
-) -> Result<u64, ErrorKind> {
+) -> Result<u64, Error> {
 	let mut hasher = DefaultHasher::new();
 	for transformer in transformers {
 		let result = transformer.hash(&mut hasher, &headers, &row);
@@ -137,13 +132,13 @@ struct Reduce<F, V> {
 }
 impl<F, V> Transform for Reduce<F, V>
 where
-	F: FnMut(V, &str) -> Result<V, ErrorKind>,
+	F: FnMut(V, &str) -> Result<V, Error>,
 	V: Display + Clone,
 {
-	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), ErrorKind> {
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
 		let field = headers
 			.get_field(row, &self.from_col)
-			.ok_or(ErrorKind::MissingColumn(self.from_col.clone()))?
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?
 			.to_string();
 		self.value = (self.reduce)(self.value.clone(), &field)?;
 		Ok(())
@@ -167,14 +162,14 @@ impl<V> Transform for Sum<V>
 where
 	V: Display + AddAssign + FromStr + Clone,
 {
-	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), ErrorKind> {
+	fn add_row(&mut self, headers: &Headers, row: &Row) -> Result<(), Error> {
 		let field = headers
 			.get_field(row, &self.from_col)
-			.ok_or(ErrorKind::MissingColumn(self.from_col.clone()))?
+			.ok_or(Error::MissingColumn(self.from_col.clone()))?
 			.to_string();
 		let new: V = match field.parse() {
 			Ok(v) => v,
-			Err(_) => return Err(ErrorKind::InvalidField(field)),
+			Err(_) => return Err(Error::InvalidField(field)),
 		};
 		self.value += new;
 		Ok(())

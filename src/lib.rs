@@ -110,21 +110,17 @@ impl Target {
 /// Alias of [`csv::StringRecord`]
 pub type Row = csv::StringRecord;
 /// Alias of `Result<Row, Error>`
-pub type RowResult = Result<Row, Error>;
+pub type RowResult = Result<Row, PlError>;
 
+/// Error originating from the specified pipeline source index
 #[derive(Debug)]
-pub struct Error {
+pub struct PlError {
+	pub error: Error,
 	pub source: usize,
-	pub kind: ErrorKind,
-}
-impl Error {
-	pub fn new(source: usize, kind: ErrorKind) -> Error {
-		Error { source, kind }
-	}
 }
 
 #[derive(Debug)]
-pub enum ErrorKind {
+pub enum Error {
 	/// CSV and IO errors are in here.
 	Csv(csv::Error),
 	/// The column of this name is missing.
@@ -135,4 +131,12 @@ pub enum ErrorKind {
 	InvalidField(String),
 	/// Two pipeline sources don't have the same headers.
 	MismatchedHeaders(Row, Row),
+}
+impl Error {
+	pub fn at_source(self, source: usize) -> PlError {
+		PlError {
+			error: self,
+			source,
+		}
+	}
 }

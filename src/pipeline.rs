@@ -4,7 +4,7 @@ use crate::pipeline_iterators::{
 };
 use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
-use crate::{Error, ErrorKind, Row, RowResult};
+use crate::{Error, PlError, Row, RowResult};
 use csv::{Reader, ReaderBuilder, StringRecordsIntoIter};
 use linked_hash_map::LinkedHashMap;
 use std::borrow::BorrowMut;
@@ -19,14 +19,14 @@ pub struct Pipeline<'a> {
 }
 
 impl<'a> Pipeline<'a> {
-	pub fn from_reader<R: io::Read + 'a>(mut reader: Reader<R>) -> Result<Self, Error> {
+	pub fn from_reader<R: io::Read + 'a>(mut reader: Reader<R>) -> Result<Self, PlError> {
 		let headers_row = reader.headers().unwrap().clone();
 		let row_iterator = RowIter::from_records(0, reader.into_records());
 		Ok(Pipeline {
 			headers: match Headers::from_row(headers_row) {
 				Ok(headers) => headers,
 				Err(duplicated_col) => {
-					return Err(Error::new(0, ErrorKind::DuplicateColumn(duplicated_col)))
+					return Err(Error::DuplicateColumn(duplicated_col).at_source(0))
 				}
 			},
 			source: 0,
@@ -35,7 +35,7 @@ impl<'a> Pipeline<'a> {
 	}
 
 	/// Create a pipeline from a CSV or TSV file.
-	pub fn from_path<P: AsRef<Path>>(file_path: P) -> Result<Self, Error> {
+	pub fn from_path<P: AsRef<Path>>(file_path: P) -> Result<Self, PlError> {
 		let ext = file_path.as_ref().extension().unwrap_or_default();
 		let delimiter = match ext.to_string_lossy().as_ref() {
 			"tsv" => b'\t',
@@ -109,6 +109,7 @@ impl<'a> Pipeline<'a> {
 		self.iterator = Box::new(AddCol {
 			iterator: self.iterator,
 			f: get_value,
+			source: self.source,
 			headers: self.headers.clone(),
 		});
 		self
@@ -139,6 +140,7 @@ impl<'a> Pipeline<'a> {
 		self.iterator = Box::new(MapRow {
 			iterator: self.iterator,
 			f: get_row,
+			source: self.source,
 			headers: self.headers.clone(),
 		});
 		self
@@ -311,6 +313,7 @@ impl<'a> Pipeline<'a> {
 		self.iterator = Box::new(Validate {
 			iterator: self.iterator,
 			f,
+			source: self.source,
 			headers: self.headers.clone(),
 		});
 		self
@@ -362,11 +365,11 @@ impl<'a> Pipeline<'a> {
 	}
 
 	/// Shorthand for `.build().run()`.
-	pub fn run(self) -> Result<(), Error> {
+	pub fn run(self) -> Result<(), PlError> {
 		self.build().run()
 	}
 
-	pub fn collect_into_string(self) -> Result<String, Error> {
+	pub fn collect_into_string(self) -> Result<String, PlError> {
 		let mut csv = String::new();
 		self.flush(StringTarget::new(&mut csv)).run()?;
 		Ok(csv)
@@ -391,7 +394,7 @@ impl<'a> PipelineIter<'a> {
 	/// Advances the iterator until an error is found.
 	///
 	/// Returns `None` when the iterator is finished.
-	pub fn next_error(&mut self) -> Option<Error> {
+	pub fn next_error(&mut self) -> Option<PlError> {
 		while let Some(item) = self.next() {
 			if let Err(err) = item {
 				return Some(err);
@@ -401,7 +404,7 @@ impl<'a> PipelineIter<'a> {
 	}
 
 	/// Run through the whole iterator. Returns the first error found, if any
-	pub fn run(&mut self) -> Result<(), Error> {
+	pub fn run(&mut self) -> Result<(), PlError> {
 		while let Some(item) = self.next() {
 			item?;
 		}
@@ -434,7 +437,7 @@ impl<R: io::Read> Iterator for RowIter<R> {
 	fn next(&mut self) -> Option<Self::Item> {
 		self.inner.next().map(|result| {
 			result.map_err(|err| {
-				return Error::new(self.source, ErrorKind::Csv(err));
+				return Error::Csv(err).at_source(self.source);
 			})
 		})
 	}
@@ -451,8 +454,8 @@ fn from_pipelines_mismatch() {
 	.unwrap_err();
 
 	assert_eq!(err.source, 2);
-	match err.kind {
-		ErrorKind::MismatchedHeaders(h1, h2) => {
+	match err.error {
+		Error::MismatchedHeaders(h1, h2) => {
 			assert_eq!(h1, Row::from(vec!["A", "B"]));
 			assert_eq!(h2, Row::from(vec!["ID", "Country"]));
 		}
