@@ -52,7 +52,7 @@ impl Transformer {
 			value: "".to_string(),
 		})
 	}
-	/// Sum the values in this column
+	/// Sum the values in this column.
 	pub fn sum<'a, N>(self, init: N) -> Box<dyn Transform + 'a>
 	where
 		N: Display + AddAssign + FromStr + Clone + 'a,
@@ -63,7 +63,7 @@ impl Transformer {
 			value: init,
 		})
 	}
-	/// Reduce the values from this column into a single value using a closure
+	/// Reduce the values from this column into a single value using a closure.
 	pub fn reduce<'a, R, V>(self, reduce: R, init: V) -> Box<dyn Transform + 'a>
 	where
 		R: FnMut(V, &str) -> Result<V, Error> + 'a,
@@ -74,6 +74,14 @@ impl Transformer {
 			from_col: self.from_col,
 			reduce,
 			value: init,
+		})
+	}
+
+	/// Count the rows that were reduced into this row.
+	pub fn count(self) -> Box<dyn Transform> {
+		Box::new(Count {
+			name: self.name,
+			value: 0,
 		})
 	}
 }
@@ -172,6 +180,24 @@ where
 			Err(_) => return Err(Error::InvalidField(field)),
 		};
 		self.value += new;
+		Ok(())
+	}
+
+	fn value(&self) -> String {
+		self.value.to_string()
+	}
+	fn name(&self) -> String {
+		self.name.clone()
+	}
+}
+
+struct Count {
+	name: String,
+	value: u128,
+}
+impl Transform for Count {
+	fn add_row(&mut self, _headers: &Headers, _row: &Row) -> Result<(), Error> {
+		self.value += 1;
 		Ok(())
 	}
 
