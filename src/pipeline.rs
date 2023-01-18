@@ -1,7 +1,7 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{
-	AddCol, Filter, Flush, MapCol, MapRow, PipelinesChain, Select, TransformInto, Validate,
-	ValidateCol,
+	AddCol, Filter, FilterCol, Flush, MapCol, MapRow, PipelinesChain, Select, TransformInto,
+	Validate, ValidateCol,
 };
 use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
@@ -192,7 +192,7 @@ impl<'a> Pipeline<'a> {
 	///   .unwrap()
 	///   .filter(|headers, row| {
 	///     let country = headers.get_field(&row, "Country").unwrap();
-	///     Ok(country == "Tuvalu")
+	///     country == "Tuvalu"
 	///   })
 	///   .collect_into_string()
 	///   .unwrap();
@@ -205,9 +205,42 @@ impl<'a> Pipeline<'a> {
 	/// ```
 	pub fn filter<F>(mut self, get_row: F) -> Self
 	where
-		F: FnMut(&Headers, &Row) -> Result<bool, Error> + 'a,
+		F: FnMut(&Headers, &Row) -> bool + 'a,
 	{
 		self.iterator = Box::new(Filter {
+			iterator: self.iterator,
+			f: get_row,
+			source: self.source,
+			headers: self.headers.clone(),
+		});
+		self
+	}
+
+	/// Filter rows based on the field of the specified column, using the provided closure.
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::Pipeline;
+	///
+	/// let csv = Pipeline::from_path("test/Countries.csv")
+	///   .unwrap()
+	///   .filter_col("Country", |country| country == "Tuvalu")
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(
+	///   csv,
+	///   "ID,Country\n\
+	///     2,Tuvalu\n"
+	/// );
+	/// ```
+	pub fn filter_col<F>(mut self, name: &str, get_row: F) -> Self
+	where
+		F: FnMut(&str) -> bool + 'a,
+	{
+		self.iterator = Box::new(FilterCol {
+			name: name.to_string(),
 			iterator: self.iterator,
 			f: get_row,
 			source: self.source,

@@ -148,7 +148,7 @@ where
 	}
 }
 
-pub struct Filter<I, F: FnMut(&Headers, &Row) -> Result<bool, Error>> {
+pub struct Filter<I, F: FnMut(&Headers, &Row) -> bool> {
 	pub iterator: I,
 	pub f: F,
 	pub source: usize,
@@ -157,7 +157,7 @@ pub struct Filter<I, F: FnMut(&Headers, &Row) -> Result<bool, Error>> {
 impl<I, F> Iterator for Filter<I, F>
 where
 	I: Iterator<Item = RowResult>,
-	F: FnMut(&Headers, &Row) -> Result<bool, Error>,
+	F: FnMut(&Headers, &Row) -> bool,
 {
 	type Item = RowResult;
 
@@ -167,11 +167,45 @@ where
 				Ok(row) => row,
 				Err(e) => return Some(Err(e)),
 			};
-			let filter = (self.f)(&self.headers, &row);
-			match filter {
-				Ok(true) => return Some(Ok(row)),
-				Ok(false) => continue,
-				Err(e) => return Some(Err(e.at_source(self.source))),
+			let pass_filter = (self.f)(&self.headers, &row);
+			if pass_filter {
+				return Some(Ok(row));
+			}
+		}
+	}
+}
+
+pub struct FilterCol<I, F: FnMut(&str) -> bool> {
+	pub name: String,
+	pub iterator: I,
+	pub f: F,
+	pub source: usize,
+	pub headers: Headers,
+}
+impl<I, F> Iterator for FilterCol<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&str) -> bool,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let row = match self.iterator.next()? {
+				Ok(row) => row,
+				Err(e) => return Some(Err(e)),
+			};
+			let field = match self.headers.get_field(&row, &self.name) {
+				Some(field) => field,
+				None => {
+					return Some(Err(
+						Error::MissingColumn(self.name.clone()).at_source(self.source)
+					))
+				}
+			};
+			let pass_filter = (self.f)(field);
+			if pass_filter {
+				return Some(Ok(row));
 			}
 		}
 	}

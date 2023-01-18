@@ -1,8 +1,8 @@
 # Changelog
 
 ## Next
-- Add Pipeline select method
-- Add Pipeline filter method
+- Add Pipeline `select` method
+- Add Pipeline `filter` & `filter_col` methods
 - Add Pipeline `from_pipelines` constructor for merging pipelines together
 - Remember row order in transform_into
 - Include source index in errors
