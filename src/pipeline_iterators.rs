@@ -148,6 +148,35 @@ where
 	}
 }
 
+pub struct Filter<I, F: FnMut(&Headers, &Row) -> Result<bool, Error>> {
+	pub iterator: I,
+	pub f: F,
+	pub source: usize,
+	pub headers: Headers,
+}
+impl<I, F> Iterator for Filter<I, F>
+where
+	I: Iterator<Item = RowResult>,
+	F: FnMut(&Headers, &Row) -> Result<bool, Error>,
+{
+	type Item = RowResult;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let row = match self.iterator.next()? {
+				Ok(row) => row,
+				Err(e) => return Some(Err(e)),
+			};
+			let filter = (self.f)(&self.headers, &row);
+			match filter {
+				Ok(true) => return Some(Ok(row)),
+				Ok(false) => continue,
+				Err(e) => return Some(Err(e.at_source(self.source))),
+			}
+		}
+	}
+}
+
 pub struct Select<I> {
 	pub iterator: I,
 	pub columns: Vec<String>,

@@ -1,6 +1,7 @@
 use super::headers::Headers;
 use crate::pipeline_iterators::{
-	AddCol, Flush, MapCol, MapRow, PipelinesChain, Select, TransformInto, Validate, ValidateCol,
+	AddCol, Filter, Flush, MapCol, MapRow, PipelinesChain, Select, TransformInto, Validate,
+	ValidateCol,
 };
 use crate::target::{StringTarget, Target};
 use crate::transform::Transform;
@@ -180,6 +181,41 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
+	/// Filter rows using the provided closure.
+	///
+	/// ## Example
+	///
+	/// ```
+	/// use csv_pipeline::Pipeline;
+	///
+	/// let csv = Pipeline::from_path("test/Countries.csv")
+	///   .unwrap()
+	///   .filter(|headers, row| {
+	///     let country = headers.get_field(&row, "Country").unwrap();
+	///     Ok(country == "Tuvalu")
+	///   })
+	///   .collect_into_string()
+	///   .unwrap();
+	///
+	/// assert_eq!(
+	///   csv,
+	///   "ID,Country\n\
+	///     2,Tuvalu\n"
+	/// );
+	/// ```
+	pub fn filter<F>(mut self, get_row: F) -> Self
+	where
+		F: FnMut(&Headers, &Row) -> Result<bool, Error> + 'a,
+	{
+		self.iterator = Box::new(Filter {
+			iterator: self.iterator,
+			f: get_row,
+			source: self.source,
+			headers: self.headers.clone(),
+		});
+		self
+	}
+
 	/// Pick which columns to output, in the specified order. Panics if duplicate colums are specified.
 	///
 	/// ## Example
@@ -266,7 +302,7 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
-	/// Group and reduce rows into. Panics if the transform results in duplicate column names.
+	/// Group and reduce rows into the provided format. Panics if the transform results in duplicate column names.
 	///
 	/// ## Example
 	///
@@ -306,6 +342,7 @@ impl<'a> Pipeline<'a> {
 		}
 	}
 
+	/// Do your own validation on each row.
 	pub fn validate<F>(mut self, f: F) -> Self
 	where
 		F: FnMut(&Headers, &Row) -> Result<(), Error> + 'a,
@@ -319,6 +356,7 @@ impl<'a> Pipeline<'a> {
 		self
 	}
 
+	/// Do your own validation on the fields in a column.
 	pub fn validate_col<F>(mut self, name: &str, f: F) -> Self
 	where
 		F: FnMut(&str) -> Result<(), Error> + 'a,

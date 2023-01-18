@@ -2,6 +2,7 @@
 
 ## Next
 - Add Pipeline select method
+- Add Pipeline filter method
 - Add Pipeline `from_pipelines` constructor for merging pipelines together
 - Remember row order in transform_into
 - Include source index in errors
