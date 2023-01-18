@@ -29,8 +29,8 @@ pub trait Transform {
 
 /// A struct for building a [`Transform`], which you can use with [`Pipeline::transform_into`](crate::Pipeline::transform_into).
 pub struct Transformer {
-	name: String,
-	from_col: String,
+	pub name: String,
+	pub from_col: String,
 }
 impl Transformer {
 	pub fn new(col_name: &str) -> Self {
