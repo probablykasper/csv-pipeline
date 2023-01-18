@@ -1,6 +1,6 @@
 # Changelog
 
-## Next
+## 0.3.0 - 2023 Jan 18
 - Add Pipeline `select` method
 - Add Pipeline `filter` & `filter_col` methods
 - Add Pipeline `from_pipelines` constructor for merging pipelines together
