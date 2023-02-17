@@ -1,6 +1,6 @@
 # Changelog
 
-## Next
+## 0.3.1 - 2023 Feb 17
 - Fix `Pipeline::from_path` panic
 
 ## 0.3.0 - 2023 Jan 18
