@@ -43,11 +43,13 @@ impl<'a> Pipeline<'a> {
 			"csv" => b',',
 			_ => panic!("Unsupported file {}", file_path.as_ref().display()),
 		};
-		let reader = ReaderBuilder::new()
+		let reader_result = ReaderBuilder::new()
 			.delimiter(delimiter)
-			.from_path(file_path)
-			.unwrap();
-		Self::from_reader(reader)
+			.from_path(file_path);
+		match reader_result {
+			Ok(reader) => Self::from_reader(reader),
+			Err(e) => Err(Error::Csv(e).at_source(0)),
+		}
 	}
 
 	/// Merge multiple source pipelines into one. The source pipelines must have identical headers, otherwise the pipelie will return a [`MismatchedHeaders`](Error::MismatchedHeaders) error  returned.

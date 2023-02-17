@@ -1,5 +1,8 @@
 # Changelog
 
+## Next
+- Fix `Pipeline::from_path` panic
+
 ## 0.3.0 - 2023 Jan 18
 - Add Pipeline `select` method
 - Add Pipeline `filter` & `filter_col` methods
