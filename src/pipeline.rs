@@ -467,6 +467,17 @@ impl<'a> Pipeline<'a> {
 		self.build().run()
 	}
 
+	pub fn collect_into_rows(self) -> Result<Vec<Row>, PlError> {
+		let pipeline_iter = self.build();
+		let header_row = pipeline_iter.headers.get_row().clone();
+		let records: Result<Vec<Row>, PlError> = pipeline_iter.map(|record| record).collect();
+		let rows = vec![header_row]
+			.into_iter()
+			.chain(records?.into_iter())
+			.collect();
+		Ok(rows)
+	}
+
 	pub fn collect_into_string(self) -> Result<String, PlError> {
 		let mut csv = String::new();
 		self.flush(StringTarget::new(&mut csv)).run()?;
