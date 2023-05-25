@@ -68,7 +68,11 @@ impl<'a> Pipeline<'a> {
 	///
 	/// assert_eq!(csv, "A,B\n1,2\n1,2\n");
 	/// ```
-	pub fn from_pipelines(pipelines: Vec<Pipeline<'a>>) -> Self {
+	pub fn from_pipelines<I>(pipelines: I) -> Self
+	where
+		I: IntoIterator<Item = Pipeline<'a>>,
+		<I as IntoIterator>::IntoIter: 'a,
+	{
 		let mut pipelines = pipelines.into_iter();
 		let current = pipelines.next();
 		let headers = match current {

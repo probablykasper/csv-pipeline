@@ -1,5 +1,8 @@
 # Changelog
 
+## Next
+- Changed `from_pipelines` to accept an iterator instead of vector
+
 ## 0.3.1 - 2023 Feb 17
 - Fix `Pipeline::from_path` panic
 
