@@ -52,6 +52,27 @@ impl<'a> Pipeline<'a> {
 		}
 	}
 
+	pub fn from_rows<I: IntoIterator<Item = Row>>(records: I) -> Result<Self, PlError>
+	where
+		<I as IntoIterator>::IntoIter: 'a,
+	{
+		let mut records = records.into_iter();
+		let headers_row = records.next().unwrap();
+		let row_iterator = records.map(|row| -> RowResult {
+			return Ok(row);
+		});
+		Ok(Pipeline {
+			headers: match Headers::from_row(headers_row) {
+				Ok(headers) => headers,
+				Err(duplicated_col) => {
+					return Err(Error::DuplicateColumn(duplicated_col).at_source(0))
+				}
+			},
+			source: 0,
+			iterator: Box::new(row_iterator),
+		})
+	}
+
 	/// Merge multiple source pipelines into one. The source pipelines must have identical headers, otherwise the pipelie will return a [`MismatchedHeaders`](Error::MismatchedHeaders) error  returned.
 	///
 	/// ## Example
