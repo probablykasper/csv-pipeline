@@ -1,6 +1,6 @@
 # Changelog
 
-## Next
+## 0.4.0 - 2023 May 25
 - Changed `from_pipelines` to accept an iterator instead of vector
 - Add `Pipeline::from_rows()`
 - Add `Pipeline::collect_into_rows()`
