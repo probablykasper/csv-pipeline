@@ -179,7 +179,9 @@ where
 			Ok(v) => v,
 			Err(_) => return Err(Error::InvalidField(field)),
 		};
+		println!("+ {}", new);
 		self.value += new;
+		println!("= {}", self.value);
 		Ok(())
 	}
 
@@ -189,6 +191,47 @@ where
 	fn name(&self) -> String {
 		self.name.clone()
 	}
+}
+#[test]
+fn test_sum() {
+	use crate::{Pipeline, Transformer};
+	use bigdecimal::BigDecimal;
+
+	let source_a = "\
+		Name,Score\n\
+		X,0.0002717\n\
+		X,0.0012421\n\
+		X,0.0002717\n\
+		\n";
+	let reader_a = csv::Reader::from_reader(source_a.as_bytes());
+	let csv_a = Pipeline::from_reader(reader_a).unwrap();
+
+	let source_b = "\
+		Name,Score\n\
+		X,0.1554265496221735094502632659\n\
+		X,0.9015300654231201127102294398\n\
+		X,1.3000732732666677958677548331\n\
+		X,0.0260421967374136391163477056\n\
+		X,0.4298765712842231366676277260\n\
+		X,2.0992253398385276395528943275\n\
+		\n";
+	let reader_b = csv::Reader::from_reader(source_b.as_bytes());
+	let csv_b = Pipeline::from_reader(reader_b).unwrap();
+
+	let csv = Pipeline::from_pipelines(vec![csv_a, csv_b])
+		.transform_into(|| {
+			vec![
+				Transformer::new("Name").keep_unique(),
+				Transformer::new("Score").sum(BigDecimal::from(0)),
+			]
+		})
+		.collect_into_string()
+		.unwrap();
+	assert_eq!(
+		csv,
+		"Name,Score\n\
+			X,4.9139594961721258333651172979\n"
+	);
 }
 
 struct Count {
